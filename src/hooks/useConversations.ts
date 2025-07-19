@@ -1,163 +1,177 @@
-'use client'
-
+// src/hooks/useConversations.ts (o donde esté ubicado)
 import { useState, useEffect } from 'react'
-import { getBrowserId } from '@/lib/browser-id'
+import { useAuth } from '@/contexts/AuthContext'
 
-export interface Message {
+interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
 }
 
-export interface Conversation {
+interface Conversation {
   id: string
-  browser_id: string
+  browser_id?: string
+  user_id?: string
   agent_id: string
-  title: string | null
+  title: string
   messages: Message[]
   created_at: string
   updated_at: string
 }
 
-export function useConversations() {
+// Browser ID helper
+function getBrowserId(): string {
+  if (typeof window === 'undefined') return ''
+
+  let browserId = localStorage.getItem('innotech_browser_id')
+  if (!browserId) {
+    browserId = crypto.randomUUID()
+    localStorage.setItem('innotech_browser_id', browserId)
+  }
+  return browserId
+}
+
+export function useConversations(agentId?: string) {
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
 
-  // Cargar conversaciones del browser actual
-  const loadConversations = async () => {
-    setLoading(true)
-    setError(null)
-
+  const fetchConversations = async () => {
     try {
+      setLoading(true)
+      setError(null)
+
+      // Get browser ID for backward compatibility
       const browserId = getBrowserId()
-      const response = await fetch('/api/conversations', {
-        headers: {
-          'x-browser-id': browserId
-        }
-      })
+
+      // Build query params
+      const params = new URLSearchParams()
+      params.append('browser_id', browserId)
+
+      if (agentId) {
+        params.append('agent_id', agentId)
+      }
+
+      const response = await fetch(`/api/conversations?${params.toString()}`)
 
       if (!response.ok) {
-        throw new Error('Failed to load conversations')
+        throw new Error(`Failed to load conversations: ${response.status}`)
       }
 
       const data = await response.json()
-      setConversations(data.conversations || [])
+      setConversations(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
       console.error('Error loading conversations:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load conversations')
+      setConversations([])
     } finally {
       setLoading(false)
     }
   }
 
-  // Crear nueva conversación
-  const createConversation = async (agentId: string, title?: string) => {
+  const createConversation = async (
+    agentId: string,
+    messages: Message[],
+    title?: string
+  ): Promise<Conversation | null> => {
     try {
       const browserId = getBrowserId()
+
       const response = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-browser-id': browserId
         },
         body: JSON.stringify({
-          browserId,
-          agentId,
-          title: title || 'Nueva conversación',
-          messages: []
-        })
+          browser_id: browserId,
+          user_id: user?.id || null,
+          agent_id: agentId,
+          title: title || `Chat con ${agentId}`,
+          messages,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create conversation')
+        throw new Error(`Failed to create conversation: ${response.status}`)
       }
 
-      const data = await response.json()
-      const newConversation = data.conversation
-
-      // Agregar a la lista local
+      const newConversation = await response.json()
       setConversations(prev => [newConversation, ...prev])
-
       return newConversation
     } catch (err) {
+      console.error('Error creating conversation:', err)
       setError(err instanceof Error ? err.message : 'Failed to create conversation')
-      throw err
+      return null
     }
   }
 
-  // Actualizar conversación con nuevos mensajes
-  const updateConversation = async (conversationId: string, messages: Message[], title?: string) => {
+  const updateConversation = async (
+    conversationId: string,
+    messages: Message[],
+    title?: string
+  ): Promise<boolean> => {
     try {
-      const browserId = getBrowserId()
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-browser-id': browserId
         },
         body: JSON.stringify({
           messages,
-          title
-        })
+          title,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to update conversation')
+        throw new Error(`Failed to update conversation: ${response.status}`)
       }
 
-      const data = await response.json()
-      const updatedConversation = data.conversation
-
-      // Actualizar en lista local
+      const updatedConversation = await response.json()
       setConversations(prev =>
         prev.map(conv =>
           conv.id === conversationId ? updatedConversation : conv
         )
       )
-
-      return updatedConversation
+      return true
     } catch (err) {
+      console.error('Error updating conversation:', err)
       setError(err instanceof Error ? err.message : 'Failed to update conversation')
-      throw err
+      return false
     }
   }
 
-  // Eliminar conversación
-  const deleteConversation = async (conversationId: string) => {
+  const deleteConversation = async (conversationId: string): Promise<boolean> => {
     try {
-      const browserId = getBrowserId()
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: 'DELETE',
-        headers: {
-          'x-browser-id': browserId
-        }
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete conversation')
+        throw new Error(`Failed to delete conversation: ${response.status}`)
       }
 
-      // Remover de lista local
       setConversations(prev => prev.filter(conv => conv.id !== conversationId))
+      return true
     } catch (err) {
+      console.error('Error deleting conversation:', err)
       setError(err instanceof Error ? err.message : 'Failed to delete conversation')
-      throw err
+      return false
     }
   }
 
-  // Cargar conversaciones al iniciar
+  // Load conversations on mount and when user changes
   useEffect(() => {
-    loadConversations()
-  }, [])
+    fetchConversations()
+  }, [agentId, user])
 
   return {
     conversations,
     loading,
     error,
-    loadConversations,
+    fetchConversations,
     createConversation,
     updateConversation,
-    deleteConversation
+    deleteConversation,
   }
 }

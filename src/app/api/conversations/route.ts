@@ -1,88 +1,116 @@
+// src/app/api/conversations/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 
-// GET - Obtener conversaciones por browser_id
 export async function GET(request: NextRequest) {
   try {
-    const browserId = request.headers.get('x-browser-id')
+    const { searchParams } = new URL(request.url)
+    const browserId = searchParams.get('browser_id')
+    const userId = searchParams.get('user_id')
+    const agentId = searchParams.get('agent_id')
 
-    if (!browserId) {
-      return NextResponse.json({
-        conversations: [],
-        message: 'No browser ID provided'
-      })
+    // Require either browser_id or user_id
+    if (!browserId && !userId) {
+      return NextResponse.json({ error: 'Browser ID or User ID is required' }, { status: 400 })
     }
 
-    const { data: conversations, error } = await supabase
+    const supabase = createServerClient()
+
+    let query = supabase
       .from('conversations')
       .select('*')
-      .eq('browser_id', browserId)
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
 
-    if (error) {
-      console.error('Error fetching conversations:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch conversations' },
-        { status: 500 }
-      )
+    // Filter by user or browser
+    if (userId) {
+      query = query.eq('user_id', userId)
+    } else if (browserId) {
+      query = query.eq('browser_id', browserId)
     }
 
-    return NextResponse.json({
-      conversations: conversations || [],
-      count: conversations?.length || 0
+    // Optional agent filter
+    if (agentId) {
+      query = query.eq('agent_id', agentId)
+    }
+
+    const { data: conversations, error } = await query
+
+    if (error) {
+      console.error('Database error:', error)
+      return NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 })
+    }
+
+    if (!conversations) {
+      return NextResponse.json([])
+    }
+
+    // Filter out conversations with invalid messages
+    const validConversations = conversations.filter(conv => {
+      if (!Array.isArray(conv.messages)) return false
+      return conv.messages.every(msg =>
+        msg &&
+        typeof msg === 'object' &&
+        typeof msg.role === 'string' &&
+        typeof msg.content === 'string'
+      )
     })
 
+    return NextResponse.json(validConversations)
   } catch (error) {
     console.error('API Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// POST - Crear nueva conversación
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { browserId, agentId, title, messages } = body
+    const { browser_id, user_id, agent_id, title, messages } = body
 
-    if (!browserId || !agentId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: browserId, agentId' },
-        { status: 400 }
-      )
+    // Require either browser_id or user_id
+    if (!browser_id && !user_id) {
+      return NextResponse.json({ error: 'Browser ID or User ID is required' }, { status: 400 })
+    }
+
+    if (!agent_id || !messages) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const supabase = createServerClient()
+
+    const insertData: any = {
+      agent_id,
+      title: title || `Chat con ${agent_id}`,
+      messages,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    // Set appropriate ID field
+    if (user_id) {
+      insertData.user_id = user_id
+      // If migrating from browser, track it
+      if (browser_id) {
+        insertData.migrated_from_browser_id = browser_id
+      }
+    } else {
+      insertData.browser_id = browser_id
     }
 
     const { data: conversation, error } = await supabase
       .from('conversations')
-      .insert({
-        browser_id: browserId,
-        agent_id: agentId,
-        title: title || 'Nueva conversación',
-        messages: messages || []
-      })
+      .insert([insertData])
       .select()
       .single()
 
     if (error) {
-      console.error('Error creating conversation:', error)
-      return NextResponse.json(
-        { error: 'Failed to create conversation' },
-        { status: 500 }
-      )
+      console.error('Database error:', error)
+      return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 })
     }
 
-    return NextResponse.json({
-      conversation,
-      message: 'Conversation created successfully'
-    })
-
+    return NextResponse.json(conversation)
   } catch (error) {
     console.error('API Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
