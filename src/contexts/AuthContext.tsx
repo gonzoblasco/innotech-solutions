@@ -4,98 +4,66 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase'
-
-type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
 interface AuthContextType {
   user: User | null
-  profile: UserProfile | null
   session: Session | null
   loading: boolean
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>
-  signIn: (email: string, password: string) => Promise<{ error: any }>
-  signOut: () => Promise<{ error: any }>
-  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>
+  signIn: (email: string, password: string) => Promise<any>
+  signUp: (email: string, password: string) => Promise<any>
+  signOut: () => Promise<void>
+  getAuthHeaders: () => Promise<HeadersInit>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
-
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
-  const supabase = createClient()
 
-  // ✅ FIXED: Inicialización con timeout
+  console.log('🔄 AuthProvider: Inicializando...')
+
   useEffect(() => {
-    if (initialized) return
+    const supabase = createClient()
 
-    const initializeAuth = async () => {
+    // Obtener sesión inicial
+    const getInitialSession = async () => {
       try {
-        console.log('🔄 AuthProvider: Inicializando...')
+        const { data: { session }, error } = await supabase.auth.getSession()
 
-        // Promise con timeout de 5 segundos
-        const sessionPromise = supabase.auth.getSession()
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth timeout')), 5000)
-        )
-
-        const result = await Promise.race([sessionPromise, timeoutPromise]) as any
-
-        const session = result?.data?.session || null
-        console.log('✅ AuthProvider: Session obtenida:', session?.user?.email || 'No session')
-
-        setSession(session)
-        setUser(session?.user ?? null)
-
-        if (session?.user) {
-          fetchProfile(session.user.id).catch(console.error)
+        if (error) {
+          console.error('❌ AuthProvider: Error getting session:', error)
+        } else {
+          setSession(session)
+          setUser(session?.user ?? null)
+          console.log('✅ AuthProvider: Session obtenida:', session?.user?.email || 'No user')
         }
-
       } catch (error) {
-        console.log('⚠️ AuthProvider: Timeout/error, usando fallback sin auth')
-        setSession(null)
-        setUser(null)
-        setProfile(null)
+        console.error('❌ AuthProvider: Exception getting session:', error)
       } finally {
         setLoading(false)
-        setInitialized(true)
         console.log('✅ AuthProvider: Inicialización completada')
       }
     }
 
-    initializeAuth()
-  }, [])
+    getInitialSession()
 
-  // ✅ FIXED: Auth listener solo después de inicializar
-  useEffect(() => {
-    if (!initialized) return
-
+    // Escuchar cambios de auth
     console.log('👂 AuthProvider: Setting up listener...')
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 AuthProvider: Auth change:', event)
 
+      // Actualizar estado
       setSession(session)
       setUser(session?.user ?? null)
+      setLoading(false)
 
-      if (session?.user && event !== 'SIGNED_OUT') {
-        fetchProfile(session.user.id).catch(console.error)
+      // Log del token para debug
+      if (session?.access_token) {
+        console.log('🔑 AuthProvider: Token disponible:', session.access_token.substring(0, 20) + '...')
       } else {
-        setProfile(null)
+        console.log('❌ AuthProvider: No token en session')
       }
     })
 
@@ -103,136 +71,110 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🛑 AuthProvider: Cleanup listener')
       subscription.unsubscribe()
     }
-  }, [initialized])
+  }, [])
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
+  // 🔧 FUNCIÓN CLAVE: Obtener headers de autenticación
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json'
+    }
 
-      if (error && error.code === 'PGRST116') {
-        // Create profile if doesn't exist
-        const { data: newProfile, error: insertError } = await supabase
-          .from('user_profiles')
-          .insert([{
-            id: userId,
-            preferences: {}
-          }])
-          .select()
-          .single()
+    if (session?.access_token) {
+      headers['authorization'] = `Bearer ${session.access_token}`
+      console.log('🔑 AuthProvider: Adding auth header for user:', user?.email)
+      console.log('🔑 Token preview:', session.access_token.substring(0, 50) + '...')
+    } else {
+      // Intentar obtener sesión fresh
+      const supabase = createClient()
+      try {
+        const { data: { session: freshSession }, error } = await supabase.auth.getSession()
+        if (freshSession?.access_token && !error) {
+          headers['authorization'] = `Bearer ${freshSession.access_token}`
+          console.log('🔑 AuthProvider: Using fresh token for user:', freshSession.user?.email)
 
-        if (!insertError) {
-          setProfile(newProfile)
+          // Actualizar estado con la sesión fresh
+          setSession(freshSession)
+          setUser(freshSession.user)
+        } else {
+          console.log('⚠️ AuthProvider: No access token available')
         }
-      } else if (!error) {
-        setProfile(data)
+      } catch (error) {
+        console.error('❌ AuthProvider: Error getting fresh session:', error)
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error)
     }
+
+    return headers
   }
 
-  const signUp = async (email: string, password: string, fullName?: string) => {
-    try {
-      console.log('📝 AuthProvider: Signing up:', email)
-
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      })
-
-      if (error) {
-        console.error('❌ SignUp error:', error)
-      } else {
-        console.log('✅ SignUp successful')
-      }
-
-      return { error }
-    } catch (error) {
-      console.error('💥 SignUp catch:', error)
-      return { error }
-    }
-  }
-
+  // Sign in
   const signIn = async (email: string, password: string) => {
     try {
-      console.log('🔑 AuthProvider: Signing in:', email)
-
-      const { error } = await supabase.auth.signInWithPassword({
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password,
+        password
       })
 
-      if (error) {
-        console.error('❌ SignIn error:', error)
-      } else {
-        console.log('✅ SignIn successful')
-      }
+      if (error) throw error
 
-      return { error }
+      console.log('✅ AuthProvider: Sign in successful:', data.user?.email)
+      return { data, error: null }
     } catch (error) {
-      console.error('💥 SignIn catch:', error)
-      return { error }
+      console.error('❌ AuthProvider: Sign in error:', error)
+      return { data: null, error }
     }
   }
 
+  // Sign up
+  const signUp = async (email: string, password: string) => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password
+      })
+
+      if (error) throw error
+
+      console.log('✅ AuthProvider: Sign up successful:', data.user?.email)
+      return { data, error: null }
+    } catch (error) {
+      console.error('❌ AuthProvider: Sign up error:', error)
+      return { data: null, error }
+    }
+  }
+
+  // Sign out
   const signOut = async () => {
     try {
-      console.log('👋 AuthProvider: Signing out')
-
+      const supabase = createClient()
       const { error } = await supabase.auth.signOut()
+      if (error) throw error
 
-      if (!error) {
-        setUser(null)
-        setProfile(null)
-        setSession(null)
-        console.log('✅ SignOut successful')
-      }
-
-      return { error }
+      console.log('✅ AuthProvider: Sign out successful')
     } catch (error) {
-      console.error('💥 SignOut catch:', error)
-      return { error }
-    }
-  }
-
-  const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) return { error: new Error('No user logged in') }
-
-    try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', user.id)
-
-      if (!error) {
-        setProfile(prev => prev ? { ...prev, ...updates } : null)
-      }
-
-      return { error }
-    } catch (error) {
-      return { error }
+      console.error('❌ AuthProvider: Sign out error:', error)
+      throw error
     }
   }
 
   const value = {
     user,
-    profile,
     session,
     loading,
-    signUp,
     signIn,
+    signUp,
     signOut,
-    updateProfile,
+    getAuthHeaders
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
 }

@@ -1,85 +1,101 @@
-// src/app/api/conversations/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createClient } from '@/lib/supabase'
 
 // GET - Obtener conversaciones por browser_id
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const browserId = searchParams.get('browser_id')
+    const supabase = createClient()
+    const browserId = request.headers.get('x-browser-id')
+
+    console.log('📡 Browser conversations request, browser_id:', browserId)
 
     if (!browserId) {
-      return NextResponse.json({ error: 'Browser ID is required' }, { status: 400 })
+      console.log('⚠️ No browser ID provided, returning empty list')
+      return NextResponse.json({
+        conversations: [],
+        message: 'No browser ID provided'
+      })
     }
-
-    const supabase = createServerClient()
 
     const { data: conversations, error } = await supabase
       .from('conversations')
       .select('*')
       .eq('browser_id', browserId)
-      .order('updated_at', { ascending: false })
+      .is('user_id', null) // Solo conversaciones no migradas
+      .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Database error:', error)
-      return NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 })
-    }
-
-    if (!conversations) {
-      return NextResponse.json([])
-    }
-
-    // Filter out conversations with invalid messages
-    const validConversations = conversations.filter(conv => {
-      if (!Array.isArray(conv.messages)) return false
-      return conv.messages.every(msg =>
-        msg &&
-        typeof msg === 'object' &&
-        typeof msg.role === 'string' &&
-        typeof msg.content === 'string'
+      console.error('❌ Error fetching browser conversations:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch conversations' },
+        { status: 500 }
       )
+    }
+
+    console.log('📊 Loaded', conversations?.length || 0, 'browser conversations')
+
+    return NextResponse.json({
+      conversations: conversations || [],
+      count: conversations?.length || 0
     })
 
-    return NextResponse.json(validConversations)
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('❌ API Error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 
 // POST - Crear nueva conversación
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createClient()
     const body = await request.json()
-    const { browser_id, agent_id, title, messages } = body
+    const { browserId, agentId, title, messages } = body
 
-    if (!browser_id || !agent_id) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    console.log('📝 Creating browser conversation:', { browserId, agentId, title })
+
+    if (!browserId || !agentId) {
+      return NextResponse.json(
+        { error: 'Missing required fields: browserId, agentId' },
+        { status: 400 }
+      )
     }
-
-    const supabase = createServerClient()
 
     const { data: conversation, error } = await supabase
       .from('conversations')
-      .insert([{
-        browser_id,
-        agent_id,
+      .insert({
+        browser_id: browserId,
+        agent_id: agentId,
         title: title || 'Nueva conversación',
         messages: messages || [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
+        user_id: null // Sin user_id para browser conversations
+      })
       .select()
       .single()
 
     if (error) {
-      console.error('Database error:', error)
-      return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 })
+      console.error('❌ Error creating conversation:', error)
+      return NextResponse.json(
+        { error: 'Failed to create conversation' },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json(conversation)
+    console.log('✅ Browser conversation created:', conversation.id)
+
+    return NextResponse.json({
+      conversation,
+      message: 'Conversation created successfully'
+    })
+
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('❌ API Error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }

@@ -1,66 +1,38 @@
-// src/app/api/user/migrate/route.ts - CREAR NUEVO ARCHIVO
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createClient } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
-    // Obtener user ID del header Authorization
-    const authHeader = request.headers.get('Authorization')
-    const userId = authHeader?.replace('Bearer ', '')
+    const supabase = createClient()
+    const body = await request.json()
+    const { browser_id, user_id } = body
 
-    if (!userId) {
-      return NextResponse.json({ error: 'No user ID provided' }, { status: 401 })
+    console.log('🔄 Starting migration for user:', user_id, 'browser:', browser_id)
+
+    if (!browser_id || !user_id) {
+      return NextResponse.json(
+        { error: 'Missing browser_id or user_id' },
+        { status: 400 }
+      )
     }
 
-    const supabase = createServerClient()
-
-    // Obtener browser ID del request body o cookies
-    const body = await request.json().catch(() => ({}))
-    let browserId = body.browser_id
-
-    // Si no viene en el body, intentar obtenerlo de diferentes fuentes
-    if (!browserId) {
-      // Buscar en headers personalizado
-      browserId = request.headers.get('x-browser-id')
-    }
-
-    // Si aún no tenemos browser ID, buscar conversaciones huérfanas
-    if (!browserId) {
-      console.log('🔍 No browser ID provided, checking for orphaned conversations')
-
-      // Verificar si el usuario ya tiene conversaciones
-      const { data: existingConversations } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1)
-
-      if (existingConversations && existingConversations.length > 0) {
-        return NextResponse.json({
-          migrated: 0,
-          message: 'Usuario ya tiene conversaciones asociadas',
-          already_migrated: true
-        })
-      }
-
-      return NextResponse.json({
-        migrated: 0,
-        message: 'No hay conversaciones para migrar',
-        no_browser_id: true
-      })
-    }
-
-    console.log('🔄 Starting migration for user:', userId, 'browser:', browserId)
-
-    // Verificar si ya se migró previamente
-    const { data: existingMigrated } = await supabase
+    // 1. Verificar si ya hay conversaciones migradas
+    const { data: existingUserConversations, error: checkError } = await supabase
       .from('conversations')
       .select('id')
-      .eq('migrated_from_browser_id', browserId)
-      .eq('user_id', userId)
+      .eq('user_id', user_id)
       .limit(1)
 
-    if (existingMigrated && existingMigrated.length > 0) {
+    if (checkError) {
+      console.error('❌ Error checking existing conversations:', checkError)
+      return NextResponse.json(
+        { error: 'Database error during check' },
+        { status: 500 }
+      )
+    }
+
+    if (existingUserConversations && existingUserConversations.length > 0) {
+      console.log('ℹ️ User already has conversations, skipping migration')
       return NextResponse.json({
         migrated: 0,
         message: 'Conversaciones ya fueron migradas previamente',
@@ -68,62 +40,62 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Buscar conversaciones del browser que no estén asociadas a ningún usuario
-    const { data: conversationsToMigrate, error: fetchError } = await supabase
+    // 2. Buscar conversaciones del browser_id que no han sido migradas
+    const { data: browserConversations, error: fetchError } = await supabase
       .from('conversations')
       .select('*')
-      .eq('browser_id', browserId)
-      .is('user_id', null)
+      .eq('browser_id', browser_id)
+      .is('user_id', null) // Solo conversaciones no migradas
 
     if (fetchError) {
-      console.error('Error fetching conversations to migrate:', fetchError)
-      return NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 })
+      console.error('❌ Error fetching browser conversations:', fetchError)
+      return NextResponse.json(
+        { error: 'Database error during fetch' },
+        { status: 500 }
+      )
     }
 
-    if (!conversationsToMigrate || conversationsToMigrate.length === 0) {
+    if (!browserConversations || browserConversations.length === 0) {
+      console.log('ℹ️ No browser conversations to migrate')
       return NextResponse.json({
         migrated: 0,
-        message: 'No hay conversaciones para migrar',
-        no_conversations: true
+        message: 'No hay conversaciones del navegador para migrar'
       })
     }
 
-    console.log(`📦 Found ${conversationsToMigrate.length} conversations to migrate`)
+    console.log('📦 Found', browserConversations.length, 'conversations to migrate')
 
-    // Migrar conversaciones: actualizar user_id y marcar migración
-    const { data: migratedConversations, error: migrateError } = await supabase
+    // 3. Migrar conversaciones: actualizar user_id y mantener browser_id para referencia
+    const { error: updateError } = await supabase
       .from('conversations')
       .update({
-        user_id: userId,
-        migrated_from_browser_id: browserId,
+        user_id: user_id,
+        migrated_from_browser_id: browser_id,
         updated_at: new Date().toISOString()
       })
-      .eq('browser_id', browserId)
+      .eq('browser_id', browser_id)
       .is('user_id', null)
-      .select('id')
 
-    if (migrateError) {
-      console.error('Error migrating conversations:', migrateError)
-      return NextResponse.json({ error: 'Failed to migrate conversations' }, { status: 500 })
+    if (updateError) {
+      console.error('❌ Error during migration:', updateError)
+      return NextResponse.json(
+        { error: 'Database error during migration' },
+        { status: 500 }
+      )
     }
 
-    const migratedCount = migratedConversations?.length || 0
-
-    console.log(`✅ Successfully migrated ${migratedCount} conversations`)
+    console.log('✅ Successfully migrated', browserConversations.length, 'conversations')
 
     return NextResponse.json({
-      migrated: migratedCount,
-      message: migratedCount > 0
-        ? `${migratedCount} conversaciones migradas exitosamente a tu cuenta`
-        : 'No había conversaciones para migrar',
-      success: true
+      migrated: browserConversations.length,
+      message: `${browserConversations.length} conversaciones migradas exitosamente`
     })
 
   } catch (error) {
-    console.error('Migration API Error:', error)
-    return NextResponse.json({
-      error: 'Error interno durante la migración',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error('❌ Migration API Error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }

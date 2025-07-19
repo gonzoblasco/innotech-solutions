@@ -154,32 +154,26 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   // Cargar última conversación del agente
   const loadLastConversationForAgent = async () => {
     try {
-      const browserId = getBrowserId()
-      const params = new URLSearchParams()
-      params.append('browser_id', browserId)
+      const allConversations = await fetch('/api/conversations', {
+        headers: { 'x-browser-id': getBrowserId() }
+      }).then(res => res.json())
 
-      const response = await fetch(`/api/conversations?${params.toString()}`)
+      // ARREGLO: Validar que conversations es un array
+      const conversationsList = allConversations.conversations || []
 
-      if (response.ok) {
-        const data = await response.json()
-        const allConversations = data || []
+      if (!Array.isArray(conversationsList)) {
+        console.error('❌ Expected conversations array, got:', typeof conversationsList)
+        return false
+      }
 
-        const agentConversations = allConversations.filter(conv => conv.agent_id === agentId)
-        const lastConversation = agentConversations[0]
+      const lastConversation = conversationsList.find(conv => conv.agent_id === agentId)
 
-        if (lastConversation && lastConversation.messages.length > 0) {
-          console.log('📋 Mensajes recuperados:', lastConversation.messages.length)
-          setMessages(lastConversation.messages)
-          setCurrentConversationId(lastConversation.id)
-
-          // ✅ NUEVO: Actualizar URL para reflejar la conversación cargada
-          const newUrl = new URL(window.location.href)
-          newUrl.searchParams.set('conversation', lastConversation.id)
-          window.history.replaceState({}, '', newUrl.toString())
-
-          console.log('🔄 Última conversación recuperada:', lastConversation.title)
-          return true
-        }
+      if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
+        console.log('📋 Mensajes de Supabase:', JSON.stringify(lastConversation.messages, null, 2))
+        setMessages(lastConversation.messages)
+        setCurrentConversationId(lastConversation.id)
+        console.log('🔄 Última conversación recuperada:', lastConversation.title, lastConversation.messages.length, 'mensajes')
+        return true
       }
     } catch (error) {
       console.error('Error loading last conversation:', error)
