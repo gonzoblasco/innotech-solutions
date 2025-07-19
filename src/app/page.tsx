@@ -1,103 +1,101 @@
-import Image from "next/image";
+import Link from 'next/link'
+import { consultorDeNegocio } from '@/data/agents/consultor-de-negocio'
+import { asesorFinanciero } from '@/data/agents/asesor-financiero'
+import { estrategaMarketing } from '@/data/agents/estratega-marketing'
+import { asesorLegal } from '@/data/agents/asesor-legal'
 
-export default function Home() {
+// AHORA TENEMOS 4 AGENTES REALES
+const agents = [consultorDeNegocio, asesorFinanciero, estrategaMarketing, asesorLegal]
+
+export default function HomePage() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <h1 className="text-3xl font-bold text-gray-900">InnoTech Solutions</h1>
+          <p className="text-gray-600 mt-2">Consultores Digitales Especializados para PyMEs</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </header>
+
+      {/* Hero Section */}
+      <section className="max-w-7xl mx-auto px-4 py-12">
+        <div className="text-center">
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            Accede a Consultores Expertos Digitales, 24/7
+          </h2>
+          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Sin complejidad técnica. Solo resultados profesionales.
+            Cada agente está especializado en resolver problemas específicos de PyMEs argentinas.
+          </p>
+        </div>
+
+        {/* Agents Grid - AHORA CON 4 AGENTES REALES */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="bg-white py-16">
+        <div className="max-w-7xl mx-auto px-4">
+          <h3 className="text-2xl font-bold text-center mb-12">¿Por qué InnoTech Solutions?</h3>
+          <div className="grid md:grid-cols-3 gap-8">
+            <FeatureCard
+              icon="🎯"
+              title="Especialización Real"
+              description="Cada agente conoce profundamente el mercado argentino y las necesidades de PyMEs"
+            />
+            <FeatureCard
+              icon="⚡"
+              title="Respuestas Inmediatas"
+              description="Disponible 24/7, sin esperas ni citas. Obtén insights profesionales al instante"
+            />
+            <FeatureCard
+              icon="💰"
+              title="Costo Accesible"
+              description="Una fracción del costo de contratar consultores tradicionales"
+            />
+          </div>
+        </div>
+      </section>
     </div>
-  );
+  )
+}
+
+// Componente para agente activo - ACTUALIZADO
+function AgentCard({ agent }: { agent: typeof consultorDeNegocio }) {
+  return (
+    <Link href={`/chat?agent=${agent.id}`}>
+      <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 cursor-pointer border border-gray-200 hover:border-blue-300">
+        <div className="text-4xl mb-4">{agent.avatar}</div>
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">{agent.name}</h3>
+        <p className="text-gray-600 mb-4">{agent.description}</p>
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-blue-600">Preguntas ejemplo:</p>
+          {agent.exampleQuestions.slice(0, 2).map((question, index) => (
+            <p key={index} className="text-sm text-gray-500">• {question}</p>
+          ))}
+        </div>
+        <div className="mt-4 inline-flex items-center text-blue-600 font-medium">
+          Comenzar conversación →
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+// ELIMINAR PlaceholderCard - ya no lo necesitamos
+
+// Componente para features
+function FeatureCard({ icon, title, description }: { icon: string, title: string, description: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-4xl mb-4">{icon}</div>
+      <h4 className="text-lg font-semibold mb-2">{title}</h4>
+      <p className="text-gray-600">{description}</p>
+    </div>
+  )
 }
