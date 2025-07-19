@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import AuthButtons from '@/components/auth/AuthButtons'
 import { consultorDeNegocio } from '@/data/agents/consultor-de-negocio'
 import { asesorFinanciero } from '@/data/agents/asesor-financiero'
 import { estrategaMarketing } from '@/data/agents/estratega-marketing'
@@ -13,8 +14,15 @@ export default function HomePage() {
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">InnoTech Solutions</h1>
-          <p className="text-gray-600 mt-2">Consultores Digitales Especializados para PyMEs</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">InnoTech Solutions</h1>
+              <p className="text-gray-600 mt-2">Consultores Digitales Especializados para PyMEs</p>
+            </div>
+
+            {/* ✅ NUEVO: Auth buttons */}
+            <AuthButtons />
+          </div>
         </div>
       </header>
 

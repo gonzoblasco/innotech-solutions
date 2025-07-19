@@ -17,10 +17,21 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId || null)
-  const [showHistory, setShowHistory] = useState(false) // NUEVO: Estado del modal
+  const [showHistory, setShowHistory] = useState(false)
+  const [showScrollButton, setShowScrollButton] = useState(false) // ✅ NUEVO: Estado para botón scroll
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null) // ✅ NUEVO: Ref para el container del chat
 
   const { conversations, loading: conversationsLoading, loadConversations, createConversation, updateConversation, deleteConversation } = useConversations()
+
+  // ✅ NUEVO: Función para detectar si necesita scroll
+  const handleScroll = () => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+      setShowScrollButton(!isNearBottom && messages.length > 3)
+    }
+  }
 
   // Función para generar título automático
   const generateTitle = (firstMessage: string): string => {
@@ -31,7 +42,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
   // Función para generar título inteligente con IA
   const generateIntelligentTitle = async (messages: Message[]): Promise<string> => {
-    // Solo generar después de al menos 3 mensajes (user -> assistant -> user mínimo)
     if (messages.length < 3) {
       const firstUserMessage = messages.find(m => m.role === 'user')
       return generateTitle(firstUserMessage?.content || 'Nueva conversación')
@@ -39,7 +49,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
     try {
       console.log('🤖 Generando título inteligente para', messages.length, 'mensajes')
-      console.log('📋 Mensajes a titular:', messages.map(m => `${m.role}: ${m.content.substring(0, 50)}...`))
 
       const response = await fetch('/api/generate-title', {
         method: 'POST',
@@ -47,17 +56,11 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         body: JSON.stringify({ messages })
       })
 
-      console.log('📡 Response status:', response.status, response.ok)
-
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ API Error:', errorText)
         throw new Error('Error en API de títulos')
       }
 
       const data = await response.json()
-      console.log('📦 API Response data:', data)
-
       const intelligentTitle = data.title || 'Nueva conversación'
 
       console.log('🏷️ Título inteligente generado:', intelligentTitle)
@@ -65,22 +68,42 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
     } catch (error) {
       console.error('💥 Error generating intelligent title:', error)
-      // Fallback al título simple
       const firstUserMessage = messages.find(m => m.role === 'user')
       return generateTitle(firstUserMessage?.content || 'Nueva conversación')
     }
   }
 
-  // Auto-scroll
+  // ✅ MEJORADO: Auto-scroll suave
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setShowScrollButton(false)
+  }
+
+  // ✅ NUEVO: Scroll forzado (para el botón)
+  const forceScrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+    setShowScrollButton(false)
   }
 
   useEffect(() => {
     scrollToBottom()
   }, [messages])
 
-  // NUEVO: Función para nueva conversación
+  // ✅ NUEVO: Listener para el scroll
+  useEffect(() => {
+    const container = chatContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [messages.length])
+
+  // Función para nueva conversación
   const startNewConversation = () => {
     setMessages([])
     setCurrentConversationId(null)
@@ -88,7 +111,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     console.log('🆕 Nueva conversación iniciada')
   }
 
-  // NUEVO: Función para cargar conversación específica
+  // Función para cargar conversación específica
   const loadConversation = async (conversation: any) => {
     setMessages(conversation.messages || [])
     setCurrentConversationId(conversation.id)
@@ -96,27 +119,65 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     console.log('📂 Conversación cargada:', conversation.title)
   }
 
-  // Cargar última conversación del agente
-  const loadLastConversationForAgent = async () => {
+  // ✅ NUEVO: Función para cargar conversación específica por ID
+  const loadSpecificConversation = async (conversationId: string) => {
     try {
-      const browserId = getBrowserId()
-      const response = await fetch('/api/conversations', {
+      console.log('🔍 Loading specific conversation:', conversationId)
+
+      const response = await fetch(`/api/conversations/${conversationId}`, {
         headers: {
-          'x-browser-id': browserId
+          'x-browser-id': getBrowserId()
         }
       })
 
       if (response.ok) {
         const data = await response.json()
-        const conversations = data.conversations || []
+        const conversation = data.conversation || data
 
-        const lastConversation = conversations.find(conv => conv.agent_id === agentId)
+        if (conversation && conversation.messages) {
+          console.log('✅ Specific conversation loaded:', conversation.title)
+          console.log('📋 Messages loaded:', conversation.messages.length)
+
+          setMessages(conversation.messages)
+          setCurrentConversationId(conversation.id)
+          return true
+        }
+      } else {
+        console.error('❌ Failed to load specific conversation:', response.status)
+      }
+    } catch (error) {
+      console.error('Error loading specific conversation:', error)
+    }
+    return false
+  }
+
+  // Cargar última conversación del agente
+  const loadLastConversationForAgent = async () => {
+    try {
+      const browserId = getBrowserId()
+      const params = new URLSearchParams()
+      params.append('browser_id', browserId)
+
+      const response = await fetch(`/api/conversations?${params.toString()}`)
+
+      if (response.ok) {
+        const data = await response.json()
+        const allConversations = data || []
+
+        const agentConversations = allConversations.filter(conv => conv.agent_id === agentId)
+        const lastConversation = agentConversations[0]
 
         if (lastConversation && lastConversation.messages.length > 0) {
-          console.log('📋 Mensajes de Supabase:', JSON.stringify(lastConversation.messages, null, 2))
+          console.log('📋 Mensajes recuperados:', lastConversation.messages.length)
           setMessages(lastConversation.messages)
           setCurrentConversationId(lastConversation.id)
-          console.log('🔄 Última conversación recuperada:', lastConversation.title, lastConversation.messages.length, 'mensajes')
+
+          // ✅ NUEVO: Actualizar URL para reflejar la conversación cargada
+          const newUrl = new URL(window.location.href)
+          newUrl.searchParams.set('conversation', lastConversation.id)
+          window.history.replaceState({}, '', newUrl.toString())
+
+          console.log('🔄 Última conversación recuperada:', lastConversation.title)
           return true
         }
       }
@@ -132,7 +193,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       console.log('💾 saveConversation called with', newMessages.length, 'messages')
 
       if (!currentConversationId && newMessages.length > 0) {
-        // Crear nueva conversación
         const firstUserMessage = newMessages.find(m => m.role === 'user')
         const initialTitle = firstUserMessage ? generateTitle(firstUserMessage.content) : 'Nueva conversación'
 
@@ -143,7 +203,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
         await updateConversation(conversation.id, newMessages)
 
-        // Generar título inteligente si hay suficientes mensajes
         if (newMessages.length >= 3) {
           console.log('🧠 Activando título inteligente con', newMessages.length, 'mensajes...')
           const intelligentTitle = await generateIntelligentTitle(newMessages)
@@ -155,17 +214,17 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         console.log('🔄 Actualizando conversación existente:', currentConversationId)
         await updateConversation(currentConversationId, newMessages)
 
-        // AGREGAR: Generar título inteligente si es una conversación que no lo tiene y ya tiene suficientes mensajes
         if (newMessages.length >= 3) {
-          // Verificar si el título actual es el básico (primer mensaje)
-          const conversations = await fetch('/api/conversations', {
-            headers: { 'x-browser-id': getBrowserId() }
-          }).then(res => res.json())
+          const browserId = getBrowserId()
+          const params = new URLSearchParams()
+          params.append('browser_id', browserId)
 
-          const currentConv = conversations.conversations?.find(c => c.id === currentConversationId)
+          const conversationsResponse = await fetch(`/api/conversations?${params.toString()}`)
+          const conversationsData = await conversationsResponse.json()
+
+          const currentConv = conversationsData?.find((c: any) => c.id === currentConversationId)
           const firstUserMessage = newMessages.find(m => m.role === 'user')
 
-          // Si el título actual es igual al primer mensaje (título básico), generar inteligente
           if (currentConv && firstUserMessage && currentConv.title === generateTitle(firstUserMessage.content)) {
             console.log('🧠 Generando título inteligente para conversación existente...')
             const intelligentTitle = await generateIntelligentTitle(newMessages)
@@ -209,7 +268,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       }
 
       const data = await response.json()
-      console.log('📨 API Response:', data)
 
       if (!data.response || typeof data.response !== 'string') {
         throw new Error('Respuesta vacía del servidor')
@@ -221,12 +279,8 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         timestamp: new Date().toISOString()
       }
 
-      console.log('🤖 Assistant Message:', JSON.stringify(assistantMessage, null, 2))
-
       const finalMessages = [...newMessages, assistantMessage]
       setMessages(finalMessages)
-
-      console.log('💾 Final Messages to Save:', JSON.stringify(finalMessages, null, 2))
 
       await saveConversation(finalMessages)
 
@@ -247,14 +301,19 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     }
   }
 
+  // ✅ MEJORADO: useEffect para manejar conversation ID en URL
   useEffect(() => {
-    if (conversationId) {
-      // Cargar conversación específica si viene en URL
-    } else if (messages.length === 0) {
-      // Cargar última conversación del agente
+    const urlParams = new URLSearchParams(window.location.search)
+    const conversationIdFromUrl = urlParams.get('conversation')
+
+    if (conversationIdFromUrl && conversationIdFromUrl !== currentConversationId) {
+      console.log('🔗 Conversation ID in URL:', conversationIdFromUrl)
+      loadSpecificConversation(conversationIdFromUrl)
+    } else if (!conversationIdFromUrl && messages.length === 0 && conversations.length > 0) {
+      // Solo cargar última conversación si no hay conversation ID en URL
       loadLastConversationForAgent()
     }
-  }, [agentId])
+  }, [agentId, conversationId, conversations])
 
   if (!agent) {
     return (
@@ -269,13 +328,12 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     )
   }
 
-  // NUEVO: Filtrar conversaciones del agente actual
   const agentConversations = conversations.filter(conv => conv.agent_id === agentId)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* ✅ MEJORADO: Header sticky */}
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <a href="/" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
@@ -291,9 +349,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
             </div>
           </div>
 
-          {/* NUEVO: Botones de acción */}
           <div className="flex items-center space-x-3">
-            {/* Botón nueva conversación */}
             {messages.length > 0 && (
               <button
                 onClick={startNewConversation}
@@ -305,11 +361,10 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
               </button>
             )}
 
-            {/* Botón historial */}
             <button
               onClick={() => {
                 setShowHistory(true)
-                loadConversations() // Recargar conversaciones
+                loadConversations()
               }}
               className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               title="Ver historial de conversaciones"
@@ -318,7 +373,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
               <span>Historial</span>
             </button>
 
-            {/* Indicador de guardado */}
             {currentConversationId && (
               <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
                 💾 Guardado
@@ -328,134 +382,14 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         </div>
       </header>
 
-      {/* NUEVO: Modal de Historial - FIX CSS */}
-      {showHistory && typeof window !== 'undefined' && createPortal(
+      {/* ✅ MEJORADO: Chat Container con flex-1 y scroll */}
+      <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full relative">
+        {/* Chat messages area */}
         <div
-          className="modal-overlay"
-          onClick={() => setShowHistory(false)}
+          ref={chatContainerRef}
+          className="flex-1 px-4 py-6 space-y-6 overflow-y-auto"
+          style={{ maxHeight: 'calc(100vh - 200px)' }}
         >
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header del modal */}
-            <div className="flex items-center justify-between p-6 border-b bg-white rounded-t-lg">
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{agent.avatar}</span>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Historial de Conversaciones</h2>
-                  <p className="text-sm text-gray-600">{agent.name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center text-2xl font-bold transition-colors"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Contenido del modal */}
-            <div className="flex-1 overflow-y-auto p-6 bg-white">
-              {conversationsLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                  <p className="text-gray-600">Cargando conversaciones...</p>
-                </div>
-              ) : agentConversations.length === 0 ? (
-                <div className="text-center py-8">
-                  <span className="text-4xl mb-4 block">🗨️</span>
-                  <p className="text-gray-600">No hay conversaciones anteriores con {agent.name}</p>
-                  <button
-                    onClick={() => setShowHistory(false)}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    Comenzar primera conversación
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {agentConversations.map(conversation => (
-                    <div
-                      key={conversation.id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
-                        conversation.id === currentConversationId ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                      }`}
-                      onClick={() => loadConversation(conversation)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 mb-1">
-                            {conversation.title || 'Conversación sin título'}
-                          </h3>
-                          <p className="text-sm text-gray-600 mb-2">
-                            {conversation.messages?.length || 0} mensajes
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(conversation.created_at).toLocaleDateString('es-ES', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-
-                        {/* Botón eliminar */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (confirm('¿Estás seguro de eliminar esta conversación?')) {
-                              deleteConversation(conversation.id)
-                              if (conversation.id === currentConversationId) {
-                                startNewConversation()
-                              }
-                            }
-                          }}
-                          className="text-gray-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors"
-                          title="Eliminar conversación"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-
-                      {conversation.id === currentConversationId && (
-                        <div className="mt-2 text-xs text-blue-600 font-medium">
-                          📍 Conversación actual
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Footer del modal */}
-            <div className="border-t p-4 bg-gray-50 rounded-b-lg">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">
-                  {agentConversations.length} conversación(es) encontrada(s)
-                </p>
-                <button
-                  onClick={() => {
-                    setShowHistory(false)
-                    startNewConversation()
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  ✨ Nueva conversación
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Chat Container - resto del código igual */}
-      <div className="max-w-4xl mx-auto">
-        <div className="px-4 py-6 space-y-6 min-h-[calc(100vh-200px)]" key={messages.length}>
           {messages.length === 0 && (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">{agent.avatar}</div>
@@ -521,8 +455,21 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Form */}
-        <div className="px-4 pb-6">
+        {/* ✅ NUEVO: Botón scroll to bottom */}
+        {showScrollButton && (
+          <button
+            onClick={forceScrollToBottom}
+            className="fixed bottom-24 right-8 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-200 z-30"
+            title="Ir al final de la conversación"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </button>
+        )}
+
+        {/* ✅ MEJORADO: Input Form con mejor accesibilidad */}
+        <div className="px-4 pb-6 bg-gray-50 sticky bottom-0">
           <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
             <div className="flex space-x-3">
               <input
@@ -530,13 +477,13 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={`Escribe tu consulta para ${agent.name}...`}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500 shadow-sm transition-colors"
                 disabled={isLoading}
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
               >
                 {isLoading ? 'Enviando...' : 'Enviar'}
               </button>
@@ -544,6 +491,127 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
           </form>
         </div>
       </div>
+
+      {/* Modal de Historial - sin cambios */}
+      {showHistory && typeof window !== 'undefined' && createPortal(
+        <div
+          className="modal-overlay"
+          onClick={() => setShowHistory(false)}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-6 border-b bg-white rounded-t-lg">
+              <div className="flex items-center space-x-3">
+                <span className="text-2xl">{agent.avatar}</span>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Historial de Conversaciones</h2>
+                  <p className="text-sm text-gray-600">{agent.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center text-2xl font-bold transition-colors"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-white">
+              {conversationsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p className="text-gray-600">Cargando conversaciones...</p>
+                </div>
+              ) : agentConversations.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="text-4xl mb-4 block">🗨️</span>
+                  <p className="text-gray-600">No hay conversaciones anteriores con {agent.name}</p>
+                  <button
+                    onClick={() => setShowHistory(false)}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Comenzar primera conversación
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {agentConversations.map(conversation => (
+                    <div
+                      key={conversation.id}
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
+                        conversation.id === currentConversationId ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                      }`}
+                      onClick={() => loadConversation(conversation)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900 mb-1">
+                            {conversation.title || 'Conversación sin título'}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {conversation.messages?.filter(msg => msg.role === 'user').length || 0} consultas realizadas
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(conversation.created_at).toLocaleDateString('es-ES', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (confirm('¿Estás seguro de eliminar esta conversación?')) {
+                              deleteConversation(conversation.id)
+                              if (conversation.id === currentConversationId) {
+                                startNewConversation()
+                              }
+                            }
+                          }}
+                          className="text-gray-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors"
+                          title="Eliminar conversación"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+
+                      {conversation.id === currentConversationId && (
+                        <div className="mt-2 text-xs text-blue-600 font-medium">
+                          📍 Conversación actual
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t p-4 bg-gray-50 rounded-b-lg">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-600">
+                  {agentConversations.length} conversación(es) encontrada(s)
+                </p>
+                <button
+                  onClick={() => {
+                    setShowHistory(false)
+                    startNewConversation()
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  ✨ Nueva conversación
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

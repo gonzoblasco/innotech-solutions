@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx
+// src/contexts/AuthContext.tsx - REEMPLAZAR COMPLETAMENTE
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
@@ -34,58 +34,76 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
   const supabase = createClient()
 
-  // Get initial session
+  // ✅ FIXED: Inicialización con timeout
   useEffect(() => {
-    const getSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+    if (initialized) return
 
-        if (error) {
-          console.error('Error getting session:', error)
-          setLoading(false)
-          return
-        }
+    const initializeAuth = async () => {
+      try {
+        console.log('🔄 AuthProvider: Inicializando...')
+
+        // Promise con timeout de 5 segundos
+        const sessionPromise = supabase.auth.getSession()
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth timeout')), 5000)
+        )
+
+        const result = await Promise.race([sessionPromise, timeoutPromise]) as any
+
+        const session = result?.data?.session || null
+        console.log('✅ AuthProvider: Session obtenida:', session?.user?.email || 'No session')
 
         setSession(session)
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          await fetchProfile(session.user.id)
+          fetchProfile(session.user.id).catch(console.error)
         }
 
-        setLoading(false)
       } catch (error) {
-        console.error('Error in getSession:', error)
+        console.log('⚠️ AuthProvider: Timeout/error, usando fallback sin auth')
+        setSession(null)
+        setUser(null)
+        setProfile(null)
+      } finally {
         setLoading(false)
+        setInitialized(true)
+        console.log('✅ AuthProvider: Inicialización completada')
       }
     }
 
-    getSession()
+    initializeAuth()
   }, [])
 
-  // Listen for auth changes
+  // ✅ FIXED: Auth listener solo después de inicializar
   useEffect(() => {
+    if (!initialized) return
+
+    console.log('👂 AuthProvider: Setting up listener...')
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email)
+      console.log('🔄 AuthProvider: Auth change:', event)
 
       setSession(session)
       setUser(session?.user ?? null)
 
-      if (session?.user) {
-        await fetchProfile(session.user.id)
+      if (session?.user && event !== 'SIGNED_OUT') {
+        fetchProfile(session.user.id).catch(console.error)
       } else {
         setProfile(null)
       }
-
-      setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      console.log('🛑 AuthProvider: Cleanup listener')
+      subscription.unsubscribe()
+    }
+  }, [initialized])
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -96,8 +114,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .single()
 
       if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create it
-        console.log('Creating new profile for user:', userId)
+        // Create profile if doesn't exist
         const { data: newProfile, error: insertError } = await supabase
           .from('user_profiles')
           .insert([{
@@ -107,24 +124,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .select()
           .single()
 
-        if (insertError) {
-          console.error('Error creating profile:', insertError)
-        } else {
+        if (!insertError) {
           setProfile(newProfile)
         }
-      } else if (error) {
-        console.error('Error fetching profile:', error)
-      } else {
+      } else if (!error) {
         setProfile(data)
       }
     } catch (error) {
-      console.error('Error in fetchProfile:', error)
+      console.error('Error fetching profile:', error)
     }
   }
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      console.log('📝 AuthProvider: Signing up:', email)
+
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -135,52 +150,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       })
 
       if (error) {
-        console.error('SignUp error:', error)
-        return { error }
+        console.error('❌ SignUp error:', error)
+      } else {
+        console.log('✅ SignUp successful')
       }
 
-      // Profile will be created automatically via onAuthStateChange
-      console.log('User signed up successfully:', data.user?.email)
-      return { error: null }
+      return { error }
     } catch (error) {
-      console.error('SignUp catch error:', error)
+      console.error('💥 SignUp catch:', error)
       return { error }
     }
   }
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('🔑 AuthProvider: Signing in:', email)
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
-        console.error('SignIn error:', error)
+        console.error('❌ SignIn error:', error)
       } else {
-        console.log('User signed in successfully')
+        console.log('✅ SignIn successful')
       }
 
       return { error }
     } catch (error) {
-      console.error('SignIn catch error:', error)
+      console.error('💥 SignIn catch:', error)
       return { error }
     }
   }
 
   const signOut = async () => {
     try {
+      console.log('👋 AuthProvider: Signing out')
+
       const { error } = await supabase.auth.signOut()
 
-      if (error) {
-        console.error('SignOut error:', error)
-      } else {
-        console.log('User signed out successfully')
+      if (!error) {
+        setUser(null)
+        setProfile(null)
+        setSession(null)
+        console.log('✅ SignOut successful')
       }
 
       return { error }
     } catch (error) {
-      console.error('SignOut catch error:', error)
+      console.error('💥 SignOut catch:', error)
       return { error }
     }
   }
@@ -194,15 +213,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', user.id)
 
-      if (error) {
-        console.error('UpdateProfile error:', error)
-      } else {
+      if (!error) {
         setProfile(prev => prev ? { ...prev, ...updates } : null)
       }
 
       return { error }
     } catch (error) {
-      console.error('UpdateProfile catch error:', error)
       return { error }
     }
   }
