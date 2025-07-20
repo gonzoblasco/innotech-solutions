@@ -91,8 +91,9 @@ export async function POST(request: NextRequest) {
       message: `${browserConversations.length} conversaciones migradas exitosamente`
     })
 
-  } catch (error) {
-    console.error('❌ Migration API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('❌ Migration API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -39,8 +39,9 @@ export async function GET(request: NextRequest) {
       }
 
       user = authUser
-    } catch (error) {
-      console.error('❌ Token verification failed:', error)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('❌ Token verification failed:', errorMessage)
       return NextResponse.json(
         { error: 'Token verification failed' },
         { status: 401 }
@@ -72,8 +73,9 @@ export async function GET(request: NextRequest) {
       user_id: user.id
     })
 
-  } catch (error) {
-    console.error('❌ API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('❌ API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -113,8 +115,9 @@ export async function POST(request: NextRequest) {
       }
 
       user = authUser
-    } catch (error) {
-      console.error('❌ Token verification failed:', error)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('❌ Token verification failed:', errorMessage)
       return NextResponse.json(
         { error: 'Token verification failed' },
         { status: 401 }
@@ -158,8 +161,9 @@ export async function POST(request: NextRequest) {
       message: 'Conversation created successfully'
     })
 
-  } catch (error) {
-    console.error('❌ API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('❌ API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

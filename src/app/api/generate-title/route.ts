@@ -5,9 +5,14 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+interface Message {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { messages } = await request.json()
+    const { messages }: { messages: Message[] } = await request.json()
 
     if (!messages || messages.length < 2) {
       return NextResponse.json({
@@ -50,8 +55,9 @@ Ejemplos buenos: "Estrategia de pricing para PyME", "Optimización de flujo de c
 
     return NextResponse.json({ title })
 
-  } catch (error) {
-    console.error('Error generating title:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Error generating title:', errorMessage)
     return NextResponse.json(
       { title: 'Nueva conversación' },
       { status: 200 } // No fallar, usar título por defecto

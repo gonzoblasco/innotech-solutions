@@ -4,10 +4,10 @@ import { createClient } from '@/lib/supabase'
 // GET - Obtener conversación específica (compatible con auth)
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const { id } = await context.params
     const supabase = createClient()
 
     // Intentar obtener usuario autenticado
@@ -75,8 +75,9 @@ export async function GET(
 
     return NextResponse.json({ conversation })
 
-  } catch (error) {
-    console.error('API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -87,10 +88,10 @@ export async function GET(
 // PUT - Actualizar conversación (compatible con auth)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const { id } = await context.params
     const body = await request.json()
     const { messages, title } = body
     const supabase = createClient()
@@ -169,8 +170,9 @@ export async function PUT(
       message: 'Conversation updated successfully'
     })
 
-  } catch (error) {
-    console.error('API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -181,10 +183,10 @@ export async function PUT(
 // DELETE - Eliminar conversación (compatible con auth)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const { id } = await context.params
     const supabase = createClient()
 
     // Intentar obtener usuario autenticado
@@ -249,8 +251,9 @@ export async function DELETE(
       message: 'Conversation deleted successfully'
     })
 
-  } catch (error) {
-    console.error('API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

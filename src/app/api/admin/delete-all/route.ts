@@ -11,8 +11,9 @@ export async function POST() {
     if (error) throw error
 
     return Response.json({ success: true })
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('Delete error:', error)
-    return Response.json({ error: error.message }, { status: 500 })
+    return Response.json({ error: errorMessage }, { status: 500 })
   }
 }

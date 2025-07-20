@@ -30,22 +30,24 @@ export async function GET(request: NextRequest) {
         }
 
         console.log('🔍 Auth verification result:', result.authResult)
-      } catch (error) {
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         result.authResult = {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
           userEmail: null,
           userId: null
         }
-        console.log('❌ Auth verification failed:', error)
+        console.log('❌ Auth verification failed:', errorMessage)
       }
     }
 
     return NextResponse.json(result)
-  } catch (error) {
-    console.error('❌ Debug API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown'
+    console.error('❌ Debug API Error:', errorMessage)
     return NextResponse.json(
-      { error: 'Debug API failed', details: error instanceof Error ? error.message : 'Unknown' },
+      { error: 'Debug API failed', details: errorMessage },
       { status: 500 }
     )
   }

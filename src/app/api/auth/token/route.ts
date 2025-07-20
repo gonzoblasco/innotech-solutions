@@ -34,8 +34,9 @@ export async function GET(request: NextRequest) {
       }
     })
 
-  } catch (error) {
-    console.error('❌ Token API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('❌ Token API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

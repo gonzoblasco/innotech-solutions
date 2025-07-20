@@ -34,17 +34,18 @@ export async function GET(request: NextRequest) {
         try {
           const header = JSON.parse(atob(segments[0]))
           result.jwtHeader = header
-        } catch (error) {
+        } catch (error: unknown) {
           result.jwtHeaderError = 'Failed to decode header'
         }
       }
     }
 
     return NextResponse.json(result)
-  } catch (error) {
-    console.error('❌ JWT Debug API Error:', error)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown'
+    console.error('❌ JWT Debug API Error:', errorMessage)
     return NextResponse.json(
-      { error: 'Debug failed', details: error instanceof Error ? error.message : 'Unknown' },
+      { error: 'Debug failed', details: errorMessage },
       { status: 500 }
     )
   }
