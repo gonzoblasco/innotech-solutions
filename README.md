@@ -7,6 +7,8 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4)](https://tailwindcss.com/)
 
 **Democratizando el acceso a expertise profesional mediante inteligencia artificial especializada.**
+**Proyecto en crecimiento activo.** Nos enfocamos en que cualquiera pueda aprovechar la IA sin conocimientos técnicos. Cada semana agregamos nuevas funciones y agentes impulsados por la comunidad.
+
 
 ---
 
@@ -292,6 +294,12 @@ Acceso en `/admin` con password `admin123`:
 - Agentes más utilizados
 - Retención de usuarios
 - Performance de respuestas
+
+## 🛣️ Roadmap
+
+- Integrar nuevos agentes para más industrias.
+- Mejorar la personalización de cada conversación.
+- Abrir un programa de feedback constante con la comunidad.
 
 ---
 
