@@ -1,83 +1,42 @@
+// app/api/conversations/[id]/route.ts - VERSIÓN CORREGIDA
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseClient } from '@/lib/supabase'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
-// GET - Obtener conversación específica (compatible con auth)
+// GET - Obtener conversación específica
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params
-    const supabase = createSupabaseClient()
 
-    // Intentar obtener usuario autenticado
-    const authHeader = request.headers.get('authorization')
-    let userId: string | null = null
+    // 🔧 FIX: Usar cliente que respeta RLS
+    const supabase = createRouteHandlerClient({ cookies })
 
-    if (authHeader) {
-      try {
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error } = await supabase.auth.getUser(token)
-        if (!error && user) {
-          userId = user.id
-        }
-      } catch (error) {
-        console.error('❌ Error verificando token:', error)
-      }
-    }
+    console.log('🔍 Getting conversation:', id)
 
-    let conversation
-    let error
-
-    if (userId) {
-      // Usuario autenticado - buscar por user_id
-      console.log('🔍 GET conversation', id, 'with user', userId)
-      const result = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', userId)
-        .single()
-
-      conversation = result.data
-      error = result.error
-    } else {
-      // Usuario no autenticado - buscar por browser_id (fallback)
-      const browserId = request.headers.get('x-browser-id')
-      console.log('🔍 GET conversation', id, 'with browser', browserId)
-
-      if (!browserId) {
-        return NextResponse.json(
-          { error: 'No authentication or browser ID' },
-          { status: 401 }
-        )
-      }
-
-      const result = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('id', id)
-        .eq('browser_id', browserId)
-        .is('user_id', null) // Solo conversaciones no migradas
-        .single()
-
-      conversation = result.data
-      error = result.error
-    }
+    // RLS se encarga del filtrado automático por user_id
+    const { data: conversation, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('id', id)
+      .single()
 
     if (error || !conversation) {
-      console.log('❌ Conversation not found:', error)
+      console.log('❌ Conversation not found or access denied:', error?.message)
       return NextResponse.json(
         { error: 'Conversation not found' },
         { status: 404 }
       )
     }
 
+    console.log('✅ Conversation found:', conversation.title)
     return NextResponse.json({ conversation })
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('API Error:', errorMessage)
+    console.error('❌ API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -85,7 +44,7 @@ export async function GET(
   }
 }
 
-// PUT - Actualizar conversación (compatible con auth)
+// PUT - Actualizar conversación
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -94,77 +53,33 @@ export async function PUT(
     const { id } = await context.params
     const body = await request.json()
     const { messages, title } = body
-    const supabase = createSupabaseClient()
 
-    // Intentar obtener usuario autenticado
-    const authHeader = request.headers.get('authorization')
-    let userId: string | null = null
-
-    if (authHeader) {
-      try {
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error } = await supabase.auth.getUser(token)
-        if (!error && user) {
-          userId = user.id
-        }
-      } catch (error) {
-        console.error('❌ Error verificando token:', error)
-      }
-    }
+    // 🔧 FIX: Usar cliente que respeta RLS
+    const supabase = createRouteHandlerClient({ cookies })
 
     const updateData: any = { updated_at: new Date().toISOString() }
     if (messages) updateData.messages = messages
     if (title) updateData.title = title
 
-    let conversation
-    let error
+    console.log('🔄 Updating conversation:', id)
 
-    if (userId) {
-      // Usuario autenticado
-      console.log('🔄 Updating conversation', id, 'for user', userId)
-      const result = await supabase
-        .from('conversations')
-        .update(updateData)
-        .eq('id', id)
-        .eq('user_id', userId)
-        .select()
-        .single()
-
-      conversation = result.data
-      error = result.error
-    } else {
-      // Usuario no autenticado - fallback browser_id
-      const browserId = request.headers.get('x-browser-id')
-
-      if (!browserId) {
-        return NextResponse.json(
-          { error: 'No authentication or browser ID' },
-          { status: 401 }
-        )
-      }
-
-      console.log('🔄 Updating conversation', id, 'for browser', browserId)
-      const result = await supabase
-        .from('conversations')
-        .update(updateData)
-        .eq('id', id)
-        .eq('browser_id', browserId)
-        .is('user_id', null)
-        .select()
-        .single()
-
-      conversation = result.data
-      error = result.error
-    }
+    // RLS se encarga de verificar que el usuario puede actualizar esta conversación
+    const { data: conversation, error } = await supabase
+      .from('conversations')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
 
     if (error || !conversation) {
-      console.log('❌ Failed to update conversation:', error)
+      console.log('❌ Failed to update conversation:', error?.message)
       return NextResponse.json(
-        { error: 'Failed to update conversation' },
-        { status: 500 }
+        { error: 'Failed to update conversation or access denied' },
+        { status: 403 }
       )
     }
 
+    console.log('✅ Conversation updated:', id)
     return NextResponse.json({
       conversation,
       message: 'Conversation updated successfully'
@@ -172,7 +87,7 @@ export async function PUT(
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('API Error:', errorMessage)
+    console.error('❌ API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -180,80 +95,41 @@ export async function PUT(
   }
 }
 
-// DELETE - Eliminar conversación (compatible con auth)
+// DELETE - Eliminar conversación
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params
-    const supabase = createSupabaseClient()
 
-    // Intentar obtener usuario autenticado
-    const authHeader = request.headers.get('authorization')
-    let userId: string | null = null
+    // 🔧 FIX: Usar cliente que respeta RLS
+    const supabase = createRouteHandlerClient({ cookies })
 
-    if (authHeader) {
-      try {
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error } = await supabase.auth.getUser(token)
-        if (!error && user) {
-          userId = user.id
-        }
-      } catch (error) {
-        console.error('❌ Error verificando token:', error)
-      }
-    }
+    console.log('🗑️ Deleting conversation:', id)
 
-    let error
-
-    if (userId) {
-      // Usuario autenticado
-      console.log('🗑️ Deleting conversation', id, 'for user', userId)
-      const result = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', userId)
-
-      error = result.error
-    } else {
-      // Usuario no autenticado - fallback browser_id
-      const browserId = request.headers.get('x-browser-id')
-
-      if (!browserId) {
-        return NextResponse.json(
-          { error: 'No authentication or browser ID' },
-          { status: 401 }
-        )
-      }
-
-      console.log('🗑️ Deleting conversation', id, 'for browser', browserId)
-      const result = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', id)
-        .eq('browser_id', browserId)
-        .is('user_id', null)
-
-      error = result.error
-    }
+    // RLS se encarga de verificar que el usuario puede eliminar esta conversación
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', id)
 
     if (error) {
-      console.log('❌ Failed to delete conversation:', error)
+      console.log('❌ Failed to delete conversation:', error.message)
       return NextResponse.json(
-        { error: 'Failed to delete conversation' },
-        { status: 500 }
+        { error: 'Failed to delete conversation or access denied' },
+        { status: 403 }
       )
     }
 
+    console.log('✅ Conversation deleted:', id)
     return NextResponse.json({
       message: 'Conversation deleted successfully'
     })
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('API Error:', errorMessage)
+    console.error('❌ API Error:', errorMessage)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

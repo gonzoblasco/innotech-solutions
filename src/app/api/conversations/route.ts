@@ -1,20 +1,23 @@
-// app/api/conversations/route.ts
+// app/api/conversations/route.ts - VERSIÓN CORREGIDA
 import { NextRequest } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { getBrowserId } from '@/lib/browser-id'
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const agentId = searchParams.get('agentId')
 
-    // Obtener autorización del header
-    const authorization = request.headers.get('authorization')
-    let user = null
+    // 🔧 FIX: Usar cliente que respeta RLS en lugar del service key
+    const supabase = createRouteHandlerClient({ cookies })
 
-    if (authorization?.startsWith('Bearer ')) {
-      const token = authorization.split(' ')[1]
-      const { data: { user: authUser } } = await supabase.auth.getUser(token)
-      user = authUser
+    // 🔧 FIX: Obtener usuario del token JWT
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      console.error('❌ Session error:', sessionError)
+      return Response.json({ conversations: [] })
     }
 
     let query = supabase
@@ -22,15 +25,18 @@ export async function GET(request: NextRequest) {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    if (user) {
-      // Usuario autenticado
-      query = query.eq('user_id', user.id)
+    if (session?.user) {
+      // Usuario autenticado: RLS filtra automáticamente por user_id
+      console.log('👤 API: Loading conversations for user:', session.user.email)
+      // NO necesitamos filtro manual porque RLS se encarga
     } else {
-      // Usuario anónimo
+      // Usuario anónimo: filtrar por browser_id
       const browserId = request.headers.get('x-browser-id')
       if (!browserId) {
+        console.log('⚠️ No browser ID for anonymous user')
         return Response.json({ conversations: [] })
       }
+      console.log('🌐 API: Loading conversations for browser:', browserId)
       query = query.eq('browser_id', browserId).is('user_id', null)
     }
 
@@ -41,14 +47,15 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      console.error('Database error:', error)
+      console.error('❌ Database error:', error)
       return Response.json({ error: error.message }, { status: 500 })
     }
 
+    console.log(`📊 API: Returning ${data?.length || 0} conversations`)
     return Response.json({ conversations: data || [] })
 
   } catch (error) {
-    console.error('API error:', error)
+    console.error('❌ API error:', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -58,14 +65,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { agent_id, title, messages } = body
 
-    // Obtener autorización del header
-    const authorization = request.headers.get('authorization')
-    let user = null
+    // 🔧 FIX: Usar cliente que respeta RLS
+    const supabase = createRouteHandlerClient({ cookies })
 
-    if (authorization?.startsWith('Bearer ')) {
-      const token = authorization.split(' ')[1]
-      const { data: { user: authUser } } = await supabase.auth.getUser(token)
-      user = authUser
+    // 🔧 FIX: Obtener usuario del token JWT
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      console.error('❌ Session error in POST:', sessionError)
+      return Response.json({ error: 'Authentication error' }, { status: 401 })
     }
 
     const conversationData: any = {
@@ -74,14 +82,18 @@ export async function POST(request: NextRequest) {
       messages: messages || []
     }
 
-    if (user) {
-      conversationData.user_id = user.id
+    if (session?.user) {
+      console.log('👤 API: Creating conversation for user:', session.user.email)
+      conversationData.user_id = session.user.id
+      // browser_id queda null
     } else {
       const browserId = request.headers.get('x-browser-id')
       if (!browserId) {
-        return Response.json({ error: 'Browser ID required' }, { status: 400 })
+        return Response.json({ error: 'Browser ID required for anonymous users' }, { status: 400 })
       }
+      console.log('🌐 API: Creating conversation for browser:', browserId)
       conversationData.browser_id = browserId
+      // user_id queda null
     }
 
     const { data, error } = await supabase
@@ -91,14 +103,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('Database error:', error)
+      console.error('❌ Database error creating conversation:', error)
       return Response.json({ error: error.message }, { status: 500 })
     }
 
+    console.log('✅ API: Conversation created:', data.id)
     return Response.json(data)
 
   } catch (error) {
-    console.error('API error:', error)
+    console.error('❌ API error in POST:', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
