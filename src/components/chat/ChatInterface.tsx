@@ -547,7 +547,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={`Escribe tu consulta para ${agent.name}...`}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-600"
                 disabled={isLoading}
               />
               <button
