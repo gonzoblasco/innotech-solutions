@@ -1,88 +1,104 @@
-import { NextRequest, NextResponse } from 'next/server'
+// app/api/conversations/route.ts
+import { NextRequest } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-// GET - Obtener conversaciones por browser_id
 export async function GET(request: NextRequest) {
   try {
-    const browserId = request.headers.get('x-browser-id')
+    const searchParams = request.nextUrl.searchParams
+    const agentId = searchParams.get('agentId')
 
-    if (!browserId) {
-      return NextResponse.json({
-        conversations: [],
-        message: 'No browser ID provided'
-      })
+    // Obtener autorización del header
+    const authorization = request.headers.get('authorization')
+    let user = null
+
+    if (authorization?.startsWith('Bearer ')) {
+      const token = authorization.split(' ')[1]
+      const { data: { user: authUser } } = await supabase.auth.getUser(token)
+      user = authUser
     }
 
-    const { data: conversations, error } = await supabase
+    let query = supabase
       .from('conversations')
       .select('*')
-      .eq('browser_id', browserId)
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
 
-    if (error) {
-      console.error('Error fetching conversations:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch conversations' },
-        { status: 500 }
-      )
+    if (user) {
+      // Usuario autenticado
+      query = query.eq('user_id', user.id)
+    } else {
+      // Usuario anónimo
+      const browserId = request.headers.get('x-browser-id')
+      if (!browserId) {
+        return Response.json({ conversations: [] })
+      }
+      query = query.eq('browser_id', browserId).is('user_id', null)
     }
 
-    return NextResponse.json({
-      conversations: conversations || [],
-      count: conversations?.length || 0
-    })
+    if (agentId) {
+      query = query.eq('agent_id', agentId)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Database error:', error)
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+
+    return Response.json({ conversations: data || [] })
 
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('API error:', error)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// POST - Crear nueva conversación
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { browserId, agentId, title, messages } = body
+    const { agent_id, title, messages } = body
 
-    if (!browserId || !agentId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: browserId, agentId' },
-        { status: 400 }
-      )
+    // Obtener autorización del header
+    const authorization = request.headers.get('authorization')
+    let user = null
+
+    if (authorization?.startsWith('Bearer ')) {
+      const token = authorization.split(' ')[1]
+      const { data: { user: authUser } } = await supabase.auth.getUser(token)
+      user = authUser
     }
 
-    const { data: conversation, error } = await supabase
+    const conversationData: any = {
+      agent_id,
+      title,
+      messages: messages || []
+    }
+
+    if (user) {
+      conversationData.user_id = user.id
+    } else {
+      const browserId = request.headers.get('x-browser-id')
+      if (!browserId) {
+        return Response.json({ error: 'Browser ID required' }, { status: 400 })
+      }
+      conversationData.browser_id = browserId
+    }
+
+    const { data, error } = await supabase
       .from('conversations')
-      .insert({
-        browser_id: browserId,
-        agent_id: agentId,
-        title: title || 'Nueva conversación',
-        messages: messages || []
-      })
+      .insert(conversationData)
       .select()
       .single()
 
     if (error) {
-      console.error('Error creating conversation:', error)
-      return NextResponse.json(
-        { error: 'Failed to create conversation' },
-        { status: 500 }
-      )
+      console.error('Database error:', error)
+      return Response.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      conversation,
-      message: 'Conversation created successfully'
-    })
+    return Response.json(data)
 
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('API error:', error)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

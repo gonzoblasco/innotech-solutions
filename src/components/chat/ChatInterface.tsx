@@ -5,6 +5,8 @@ import { agents } from '@/data/agents'
 import { useConversations, type Message } from '@/hooks/useConversations'
 import { getBrowserId } from '@/lib/browser-id'
 import { createPortal } from 'react-dom'
+import { useAuth } from '@/contexts/AuthContext'
+import AuthButton from '@/components/auth/AuthButton'
 
 interface ChatInterfaceProps {
   agentId: string
@@ -17,8 +19,9 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId || null)
-  const [showHistory, setShowHistory] = useState(false) // NUEVO: Estado del modal
+  const [showHistory, setShowHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
 
   const { conversations, loading: conversationsLoading, loadConversations, createConversation, updateConversation, deleteConversation } = useConversations()
 
@@ -39,7 +42,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
     try {
       console.log('🤖 Generando título inteligente para', messages.length, 'mensajes')
-      console.log('📋 Mensajes a titular:', messages.map(m => `${m.role}: ${m.content.substring(0, 50)}...`))
 
       const response = await fetch('/api/generate-title', {
         method: 'POST',
@@ -47,17 +49,11 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         body: JSON.stringify({ messages })
       })
 
-      console.log('📡 Response status:', response.status, response.ok)
-
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ API Error:', errorText)
         throw new Error('Error en API de títulos')
       }
 
       const data = await response.json()
-      console.log('📦 API Response data:', data)
-
       const intelligentTitle = data.title || 'Nueva conversación'
 
       console.log('🏷️ Título inteligente generado:', intelligentTitle)
@@ -80,7 +76,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     scrollToBottom()
   }, [messages])
 
-  // NUEVO: Función para nueva conversación
+  // Función para nueva conversación
   const startNewConversation = () => {
     setMessages([])
     setCurrentConversationId(null)
@@ -88,7 +84,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     console.log('🆕 Nueva conversación iniciada')
   }
 
-  // NUEVO: Función para cargar conversación específica
+  // Función para cargar conversación específica
   const loadConversation = async (conversation: any) => {
     setMessages(conversation.messages || [])
     setCurrentConversationId(conversation.id)
@@ -96,29 +92,21 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     console.log('📂 Conversación cargada:', conversation.title)
   }
 
-  // Cargar última conversación del agente
+  // Cargar última conversación del agente - CORREGIDO
   const loadLastConversationForAgent = async () => {
     try {
-      const browserId = getBrowserId()
-      const response = await fetch('/api/conversations', {
-        headers: {
-          'x-browser-id': browserId
-        }
-      })
+      // Primero cargar todas las conversaciones
+      await loadConversations()
 
-      if (response.ok) {
-        const data = await response.json()
-        const conversations = data.conversations || []
+      // Buscar la última del agente actual
+      const agentConversations = conversations.filter(conv => conv.agent_id === agentId)
+      const lastConversation = agentConversations[0] // Ya vienen ordenadas por updated_at desc
 
-        const lastConversation = conversations.find(conv => conv.agent_id === agentId)
-
-        if (lastConversation && lastConversation.messages.length > 0) {
-          console.log('📋 Mensajes de Supabase:', JSON.stringify(lastConversation.messages, null, 2))
-          setMessages(lastConversation.messages)
-          setCurrentConversationId(lastConversation.id)
-          console.log('🔄 Última conversación recuperada:', lastConversation.title, lastConversation.messages.length, 'mensajes')
-          return true
-        }
+      if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
+        console.log('🔄 Última conversación recuperada:', lastConversation.title, lastConversation.messages.length, 'mensajes')
+        setMessages(lastConversation.messages)
+        setCurrentConversationId(lastConversation.id)
+        return true
       }
     } catch (error) {
       console.error('Error loading last conversation:', error)
@@ -151,18 +139,16 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
           console.log('🏷️ Título actualizado a:', intelligentTitle)
         }
 
+        // Recargar conversaciones después de crear una nueva
+        await loadConversations()
+
       } else if (currentConversationId) {
         console.log('🔄 Actualizando conversación existente:', currentConversationId)
         await updateConversation(currentConversationId, newMessages)
 
-        // AGREGAR: Generar título inteligente si es una conversación que no lo tiene y ya tiene suficientes mensajes
+        // Generar título inteligente si es una conversación que no lo tiene y ya tiene suficientes mensajes
         if (newMessages.length >= 3) {
-          // Verificar si el título actual es el básico (primer mensaje)
-          const conversations = await fetch('/api/conversations', {
-            headers: { 'x-browser-id': getBrowserId() }
-          }).then(res => res.json())
-
-          const currentConv = conversations.conversations?.find(c => c.id === currentConversationId)
+          const currentConv = conversations.find(c => c.id === currentConversationId)
           const firstUserMessage = newMessages.find(m => m.role === 'user')
 
           // Si el título actual es igual al primer mensaje (título básico), generar inteligente
@@ -173,6 +159,9 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
             console.log('🏷️ Título inteligente aplicado a conversación existente:', intelligentTitle)
           }
         }
+
+        // Recargar conversaciones después de actualizar
+        await loadConversations()
       }
     } catch (error) {
       console.error('Error saving conversation:', error)
@@ -209,7 +198,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       }
 
       const data = await response.json()
-      console.log('📨 API Response:', data)
 
       if (!data.response || typeof data.response !== 'string') {
         throw new Error('Respuesta vacía del servidor')
@@ -221,12 +209,8 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         timestamp: new Date().toISOString()
       }
 
-      console.log('🤖 Assistant Message:', JSON.stringify(assistantMessage, null, 2))
-
       const finalMessages = [...newMessages, assistantMessage]
       setMessages(finalMessages)
-
-      console.log('💾 Final Messages to Save:', JSON.stringify(finalMessages, null, 2))
 
       await saveConversation(finalMessages)
 
@@ -247,14 +231,40 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     }
   }
 
+  // EFECTO CORREGIDO - Cargar conversaciones al inicio
   useEffect(() => {
-    if (conversationId) {
-      // Cargar conversación específica si viene en URL
-    } else if (messages.length === 0) {
-      // Cargar última conversación del agente
-      loadLastConversationForAgent()
+    const initializeChat = async () => {
+      console.log('🔄 Inicializando chat para agente:', agentId)
+
+      // Cargar conversaciones primero
+      await loadConversations()
+
+      if (conversationId) {
+        // Cargar conversación específica si viene en URL
+        console.log('📂 Cargando conversación específica:', conversationId)
+      } else if (messages.length === 0) {
+        // Intentar cargar última conversación del agente
+        console.log('🔍 Buscando última conversación del agente...')
+        await loadLastConversationForAgent()
+      }
     }
-  }, [agentId])
+
+    initializeChat()
+  }, [agentId, user]) // Recargar cuando cambie agente o usuario
+
+  // Efecto adicional para recargar cuando cambien las conversaciones
+  useEffect(() => {
+    if (conversations.length > 0 && messages.length === 0 && !conversationId) {
+      const agentConversations = conversations.filter(conv => conv.agent_id === agentId)
+      const lastConversation = agentConversations[0]
+
+      if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
+        console.log('🔄 Aplicando última conversación desde useEffect:', lastConversation.title)
+        setMessages(lastConversation.messages)
+        setCurrentConversationId(lastConversation.id)
+      }
+    }
+  }, [conversations, agentId])
 
   if (!agent) {
     return (
@@ -269,7 +279,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     )
   }
 
-  // NUEVO: Filtrar conversaciones del agente actual
+  // Filtrar conversaciones del agente actual
   const agentConversations = conversations.filter(conv => conv.agent_id === agentId)
 
   return (
@@ -291,7 +301,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
             </div>
           </div>
 
-          {/* NUEVO: Botones de acción */}
+          {/* Botones de acción */}
           <div className="flex items-center space-x-3">
             {/* Botón nueva conversación */}
             {messages.length > 0 && (
@@ -305,18 +315,25 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
               </button>
             )}
 
-            {/* Botón historial */}
-            <button
-              onClick={() => {
-                setShowHistory(true)
-                loadConversations() // Recargar conversaciones
-              }}
-              className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Ver historial de conversaciones"
-            >
-              <span>📚</span>
-              <span>Historial</span>
-            </button>
+            {/* Botón historial - CORREGIDO: Solo mostrar si hay conversaciones */}
+            {agentConversations.length > 0 && (
+              <button
+                onClick={() => {
+                  setShowHistory(true)
+                  loadConversations() // Recargar conversaciones
+                }}
+                className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Ver historial de conversaciones"
+              >
+                <span>📚</span>
+                <span>Historial ({agentConversations.length})</span>
+              </button>
+            )}
+
+            {/* AuthButton */}
+            <div className="relative">
+              <AuthButton />
+            </div>
 
             {/* Indicador de guardado */}
             {currentConversationId && (
@@ -328,14 +345,14 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         </div>
       </header>
 
-      {/* NUEVO: Modal de Historial - FIX CSS */}
+      {/* Modal de Historial */}
       {showHistory && typeof window !== 'undefined' && createPortal(
         <div
-          className="modal-overlay"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4"
           onClick={() => setShowHistory(false)}
         >
           <div
-            className="modal-content"
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header del modal */}
@@ -453,7 +470,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         document.body
       )}
 
-      {/* Chat Container - resto del código igual */}
+      {/* Chat Container */}
       <div className="max-w-4xl mx-auto">
         <div className="px-4 py-6 space-y-6 min-h-[calc(100vh-200px)]" key={messages.length}>
           {messages.length === 0 && (

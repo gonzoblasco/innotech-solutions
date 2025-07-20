@@ -1,6 +1,6 @@
-'use client'
-
-import { useState, useEffect } from 'react'
+// hooks/useConversations.ts
+import { useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 import { getBrowserId } from '@/lib/browser-id'
 
 export interface Message {
@@ -9,9 +9,10 @@ export interface Message {
   timestamp: string
 }
 
-export interface Conversation {
+interface Conversation {
   id: string
-  browser_id: string
+  browser_id: string | null
+  user_id: string | null
   agent_id: string
   title: string | null
   messages: Message[]
@@ -22,139 +23,92 @@ export interface Conversation {
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  // Cargar conversaciones del browser actual
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     setLoading(true)
-    setError(null)
-
     try {
-      const browserId = getBrowserId()
-      const response = await fetch('/api/conversations', {
-        headers: {
-          'x-browser-id': browserId
-        }
-      })
+      // Obtener usuario actual
+      const { data: { session } } = await supabase.auth.getSession()
 
-      if (!response.ok) {
-        throw new Error('Failed to load conversations')
+      let query = supabase
+        .from('conversations')
+        .select('*')
+        .order('updated_at', { ascending: false })
+
+      if (session?.user) {
+        // Usuario autenticado: sus conversaciones
+        query = query.eq('user_id', session.user.id)
+      } else {
+        // Usuario anónimo: conversaciones del browser
+        const browserId = getBrowserId()
+        query = query.eq('browser_id', browserId).is('user_id', null)
       }
 
-      const data = await response.json()
-      setConversations(data.conversations || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-      console.error('Error loading conversations:', err)
+      const { data, error } = await query
+
+      if (error) throw error
+      setConversations(data || [])
+    } catch (error) {
+      console.error('Error loading conversations:', error)
+      setConversations([])
     } finally {
       setLoading(false)
     }
-  }
-
-  // Crear nueva conversación
-  const createConversation = async (agentId: string, title?: string) => {
-    try {
-      const browserId = getBrowserId()
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-browser-id': browserId
-        },
-        body: JSON.stringify({
-          browserId,
-          agentId,
-          title: title || 'Nueva conversación',
-          messages: []
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create conversation')
-      }
-
-      const data = await response.json()
-      const newConversation = data.conversation
-
-      // Agregar a la lista local
-      setConversations(prev => [newConversation, ...prev])
-
-      return newConversation
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create conversation')
-      throw err
-    }
-  }
-
-  // Actualizar conversación con nuevos mensajes
-  const updateConversation = async (conversationId: string, messages: Message[], title?: string) => {
-    try {
-      const browserId = getBrowserId()
-      const response = await fetch(`/api/conversations/${conversationId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-browser-id': browserId
-        },
-        body: JSON.stringify({
-          messages,
-          title
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to update conversation')
-      }
-
-      const data = await response.json()
-      const updatedConversation = data.conversation
-
-      // Actualizar en lista local
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === conversationId ? updatedConversation : conv
-        )
-      )
-
-      return updatedConversation
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update conversation')
-      throw err
-    }
-  }
-
-  // Eliminar conversación
-  const deleteConversation = async (conversationId: string) => {
-    try {
-      const browserId = getBrowserId()
-      const response = await fetch(`/api/conversations/${conversationId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-browser-id': browserId
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete conversation')
-      }
-
-      // Remover de lista local
-      setConversations(prev => prev.filter(conv => conv.id !== conversationId))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete conversation')
-      throw err
-    }
-  }
-
-  // Cargar conversaciones al iniciar
-  useEffect(() => {
-    loadConversations()
   }, [])
+
+  const createConversation = async (agentId: string, title: string) => {
+    // Obtener usuario actual
+    const { data: { session } } = await supabase.auth.getSession()
+
+    const conversationData: any = {
+      agent_id: agentId,
+      title,
+      messages: []
+    }
+
+    if (session?.user) {
+      conversationData.user_id = session.user.id
+    } else {
+      conversationData.browser_id = getBrowserId()
+    }
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert(conversationData)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  const updateConversation = async (id: string, messages: Message[], title?: string) => {
+    const updateData: any = { messages }
+    if (title) updateData.title = title
+
+    const { error } = await supabase
+      .from('conversations')
+      .update(updateData)
+      .eq('id', id)
+
+    if (error) throw error
+  }
+
+  const deleteConversation = async (id: string) => {
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+
+    // Actualizar estado local
+    setConversations(prev => prev.filter(conv => conv.id !== id))
+  }
 
   return {
     conversations,
     loading,
-    error,
     loadConversations,
     createConversation,
     updateConversation,
