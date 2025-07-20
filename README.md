@@ -181,7 +181,7 @@ export const consultorDeNegocio = {
   avatar: '👔',
   tags: ['Estrategia', 'Crecimiento', 'PyME'],
   systemPrompt: `Eres un consultor senior...`,
-  exampleQuestions: [...]
+  exampleQuestions: [...preguntas]
 }
 ```
 
@@ -358,7 +358,7 @@ Este proyecto está bajo licencia MIT. Ver `LICENSE` para más detalles.
 **Gonzalo Blasco**
 - Emprendedor en IA aplicada
 - Buenos Aires, Argentina
-- [LinkedIn](your-linkedin) | [GitHub](your-github)
+- [LinkedIn](https://www.linkedin.com/in/gonzalo-blasco/) | [GitHub](https://github.com/gonzoblasco)
 
 ---
 
