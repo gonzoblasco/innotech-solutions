@@ -13,6 +13,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
+// Función helper para crear clientes (exportada)
+export { createClient }
+
 // Types actualizados para incluir user_id
 export type Database = {
   public: {

@@ -78,9 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [supabase])
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<void> => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -90,13 +90,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // La sesión se actualiza automáticamente via onAuthStateChange
-      return data
     } catch (error: any) {
       throw new Error(error.message || 'Error al iniciar sesión')
     }
   }
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string): Promise<void> => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -112,14 +111,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('User registered, auto-signing in...')
         await login(email, password)
       }
-
-      return data
     } catch (error: any) {
       throw new Error(error.message || 'Error al crear cuenta')
     }
   }
 
-  const logout = async () => {
+  const logout = async (): Promise<void> => {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) {

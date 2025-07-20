@@ -43,8 +43,9 @@ export default function AdminPage() {
       } else {
         alert('❌ Error: ' + data.error)
       }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+      alert('❌ Error: ' + errorMessage)
     } finally {
       setLoading(false)
     }

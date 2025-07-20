@@ -111,7 +111,7 @@ export default function Home() {
                         {agent.description}
                       </p>
                       <div className="flex flex-wrap gap-1 justify-center mb-4">
-                        {agent.tags?.slice(0, 3).map((tag) => (
+                        {agent.tags?.slice(0, 3).map((tag: string) => (
                           <span
                             key={tag}
                             className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
