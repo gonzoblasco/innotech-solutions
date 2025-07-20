@@ -1,77 +1,157 @@
-// contexts/AuthContext.tsx
 'use client'
+
 import { createContext, useContext, useEffect, useState } from 'react'
-import { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { User, Session } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
+  session: Session | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<any>
-  signUp: (email: string, password: string, fullName?: string) => Promise<any>
-  signOut: () => Promise<void>
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string) => Promise<void>
+  logout: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    // Obtener sesión inicial
+    // Función para manejar cambios de auth
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user ?? null)
-      setLoading(false)
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        if (error) {
+          console.error('Error getting session:', error.message)
+          setSession(null)
+          setUser(null)
+        } else {
+          setSession(session)
+          setUser(session?.user ?? null)
+        }
+      } catch (error) {
+        console.error('Session check failed:', error)
+        setSession(null)
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
     }
 
+    // Obtener sesión inicial
     getSession()
 
-    // Escuchar cambios de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔐 Auth event:', event)
-        setUser(session?.user ?? null)
-        setLoading(false)
+    // Escuchar cambios de autenticación
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email)
 
-        // Migrar conversaciones al hacer login
-        if (event === 'SIGNED_IN' && session?.user) {
-          await migrateBrowserConversations(session.user.id)
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
+
+      // Migrar conversaciones al hacer login
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          const response = await fetch('/api/conversations/migrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: session.user.id })
+          })
+
+          if (response.ok) {
+            console.log('Conversations migrated successfully')
+          }
+        } catch (error) {
+          console.error('Migration failed:', error)
         }
       }
-    )
+    })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [supabase])
 
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-    return { data, error }
-  }
+  const login = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-  const signUp = async (email: string, password: string, fullName?: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName || ''
-        }
+      if (error) {
+        throw error
       }
-    })
-    return { data, error }
+
+      // La sesión se actualiza automáticamente via onAuthStateChange
+      return data
+    } catch (error: any) {
+      throw new Error(error.message || 'Error al iniciar sesión')
+    }
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const register = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      // Para desarrollo, auto-confirmar
+      if (data.user && !data.user.email_confirmed_at) {
+        console.log('User registered, auto-signing in...')
+        await login(email, password)
+      }
+
+      return data
+    } catch (error: any) {
+      throw new Error(error.message || 'Error al crear cuenta')
+    }
+  }
+
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        throw error
+      }
+
+      // Limpiar estado local
+      setUser(null)
+      setSession(null)
+
+      // Redirect a home
+      window.location.href = '/'
+    } catch (error: any) {
+      console.error('Logout error:', error)
+      // Forzar limpieza aunque haya error
+      setUser(null)
+      setSession(null)
+      window.location.href = '/'
+    }
+  }
+
+  const value = {
+    user,
+    session,
+    loading,
+    login,
+    register,
+    logout,
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
@@ -79,28 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-}
-
-// Función para migrar conversaciones del browser al usuario
-async function migrateBrowserConversations(userId: string) {
-  const browserId = localStorage.getItem('innotech_browser_id')
-  if (!browserId) return
-
-  try {
-    const response = await fetch('/api/conversations/migrate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ browserId, userId })
-    })
-
-    if (response.ok) {
-      console.log('✅ Conversaciones migradas exitosamente')
-    }
-  } catch (error) {
-    console.error('❌ Error migrating conversations:', error)
-  }
 }

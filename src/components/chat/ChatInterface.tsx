@@ -332,7 +332,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
             {/* AuthButton */}
             <div className="relative">
-              <AuthButton />
+              <AuthButton variant="chat" />
             </div>
 
             {/* Indicador de guardado */}
