@@ -1,6 +1,7 @@
+// src/app/dashboard/page.tsx - ACTUALIZAR solo la parte de useEffect
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react' // ✅ AGREGAR useRef
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { agents } from '@/data/agents'
@@ -27,7 +28,7 @@ export default function Dashboard() {
     message: string
   } | null>(null)
 
-  // Flags para prevenir doble ejecución
+  // ✅ NUEVO: Flags para prevenir doble ejecución
   const initializationRef = useRef(false)
   const migrationRef = useRef(false)
 
@@ -38,48 +39,38 @@ export default function Dashboard() {
     }
   }, [user, loading, router])
 
-  // 🔧 ARREGLADO: Cargar conversaciones usando browser ID temporalmente
+  // Cargar conversaciones del usuario
   const loadUserConversations = async () => {
     if (!user) return
 
     try {
       setLoadingConversations(true)
 
-      // TEMPORAL: Usar browser ID hasta que arreglemos JWT
-      const browserId = getBrowserId()
-      console.log('📡 Loading dashboard conversations with browser ID:', browserId)
-
-      const response = await fetch(`/api/conversations`, {
+      const response = await fetch(`/api/user/conversations`, {
         headers: {
-          'x-browser-id': browserId
+          'Authorization': `Bearer ${user.id}`
         }
       })
 
       if (response.ok) {
         const data = await response.json()
-        const conversationsList = data.conversations || []
-
-        // Asegurar que es un array
-        const validConversations = Array.isArray(conversationsList) ? conversationsList : []
-        setConversations(validConversations)
-        console.log(`📊 Loaded ${validConversations.length} dashboard conversations`)
+        setConversations(data.conversations || [])
+        console.log(`📊 Loaded ${data.conversations?.length || 0} user conversations`)
       } else {
-        console.error('Failed to load dashboard conversations:', response.status)
-        setConversations([]) // Fallback a array vacío
+        console.error('Failed to load user conversations:', response.status)
       }
     } catch (error) {
-      console.error('Error loading dashboard conversations:', error)
-      setConversations([]) // Fallback a array vacío
+      console.error('Error loading user conversations:', error)
     } finally {
       setLoadingConversations(false)
     }
   }
 
-  // 🔧 ARREGLADO: Migración usando endpoint correcto
+  // ✅ MEJORADO: Migrar conversaciones con protección contra doble ejecución
   const migrateConversations = async () => {
     if (!user || migrationRef.current) return
 
-    migrationRef.current = true
+    migrationRef.current = true // ✅ Marcar como ejecutándose
 
     try {
       console.log('🔄 Starting automatic migration...')
@@ -87,15 +78,13 @@ export default function Dashboard() {
       const browserId = getBrowserId()
       console.log('🆔 Browser ID for migration:', browserId)
 
-      // TEMPORAL: Usar el endpoint que funciona
       const response = await fetch('/api/user/migrate', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
-          // ELIMINAR: Authorization header por ahora
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.id}`
         },
         body: JSON.stringify({
-          user_id: user.id, // Usar user.id directamente
           browser_id: browserId
         })
       })
@@ -135,10 +124,10 @@ export default function Dashboard() {
     }
   }
 
-  // useEffect con protección contra doble ejecución
+  // ✅ ARREGLADO: useEffect con protección contra doble ejecución
   useEffect(() => {
     if (user && !initializationRef.current) {
-      initializationRef.current = true
+      initializationRef.current = true // ✅ Marcar como inicializado
 
       console.log('👤 User logged in, initializing dashboard...')
 
@@ -151,6 +140,8 @@ export default function Dashboard() {
       initializeDashboard()
     }
   }, [user])
+
+  // ✅ RESTO DEL COMPONENTE IGUAL...
 
   // Loading state
   if (loading) {
@@ -306,7 +297,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 🔧 ARREGLADO: Mejor handling de estados de loading y empty */}
+        {/* Conversations by Agent */}
         <div className="space-y-8">
           {loadingConversations ? (
             <div className="text-center py-12">
