@@ -1,24 +1,32 @@
-// src/lib/supabase.ts
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+// lib/supabase.ts
+import { createClient } from '@supabase/supabase-js'
 
-// Client for client components (browser)
-export const createClient = () => createClientComponentClient()
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Types for database
+// Cliente único para toda la app
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+})
+
+// Types actualizados para incluir user_id
 export type Database = {
   public: {
     Tables: {
       conversations: {
         Row: {
           id: string
-          browser_id: string | null
-          user_id: string | null
+          browser_id: string | null  // Ahora nullable
+          user_id: string | null     // Nuevo campo
           agent_id: string
           title: string | null
           messages: any[]
           created_at: string
           updated_at: string
-          migrated_from_browser_id: string | null
         }
         Insert: {
           id?: string
@@ -29,7 +37,6 @@ export type Database = {
           messages?: any[]
           created_at?: string
           updated_at?: string
-          migrated_from_browser_id?: string | null
         }
         Update: {
           id?: string
@@ -38,32 +45,34 @@ export type Database = {
           agent_id?: string
           title?: string | null
           messages?: any[]
+          created_at?: string
           updated_at?: string
-          migrated_from_browser_id?: string | null
         }
       }
       user_profiles: {
         Row: {
           id: string
+          email: string
           full_name: string | null
-          avatar_url: string | null
-          preferences: any
           created_at: string
           updated_at: string
+          preferences: any
         }
         Insert: {
           id: string
+          email: string
           full_name?: string | null
-          avatar_url?: string | null
-          preferences?: any
           created_at?: string
           updated_at?: string
+          preferences?: any
         }
         Update: {
+          id?: string
+          email?: string
           full_name?: string | null
-          avatar_url?: string | null
-          preferences?: any
+          created_at?: string
           updated_at?: string
+          preferences?: any
         }
       }
     }
