@@ -116,22 +116,9 @@ export default function AdminPage() {
           <h1 style={{ color: '#000', fontSize: '24px', margin: '0 0 20px 0' }}>
             🔒 ADMIN INNOTECH
           </h1>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="admin123"
-            style={{
-              padding: '10px',
-              fontSize: '16px',
-              border: '2px solid #000',
-              marginBottom: '20px',
-              width: '200px',
-            }}
-          />
-          <br />
-          <button
-            onClick={() => {
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
               if (password === 'admin123') {
                 setAuthorized(true)
               } else {
@@ -139,17 +126,35 @@ export default function AdminPage() {
                 setPassword('')
               }
             }}
-            style={{
-              padding: '10px 20px',
-              fontSize: '16px',
-              backgroundColor: '#007acc',
-              color: 'white',
-              border: 'none',
-              cursor: 'pointer',
-            }}
           >
-            ENTRAR
-          </button>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="admin123"
+              style={{
+                padding: '10px',
+                fontSize: '16px',
+                border: '2px solid #000',
+                marginBottom: '20px',
+                width: '200px'
+              }}
+            />
+            <br />
+            <button
+              type="submit"
+              style={{
+                padding: '10px 20px',
+                fontSize: '16px',
+                backgroundColor: '#007acc',
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              ENTRAR
+            </button>
+          </form>
         </div>
       </div>
     )
