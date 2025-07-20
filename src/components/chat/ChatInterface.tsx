@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import { agents } from '@/data/agents'
 import { useConversations, type Message } from '@/hooks/useConversations'
 import { getBrowserId } from '@/lib/browser-id'
@@ -20,7 +21,9 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   const [isLoading, setIsLoading] = useState(false)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId || null)
   const [showHistory, setShowHistory] = useState(false)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
 
   const { conversations, loading: conversationsLoading, loadConversations, createConversation, updateConversation, deleteConversation } = useConversations()
@@ -72,9 +75,26 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Detectar scroll para mostrar/ocultar botón "scroll to bottom"
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+      setShowScrollToBottom(!isNearBottom && messages.length > 0)
+    }
+  }
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [messages.length])
 
   // Función para nueva conversación
   const startNewConversation = () => {
@@ -85,7 +105,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   }
 
   // Función para cargar conversación específica
-  const loadConversation = async (conversation: any) => {
+  const loadConversation = async (conversation: { id: string; messages?: Message[]; title?: string | null }) => {
     setMessages(conversation.messages || [])
     setCurrentConversationId(conversation.id)
     setShowHistory(false)
@@ -271,9 +291,9 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Agente no encontrado</h1>
-          <a href="/" className="text-blue-600 hover:text-blue-800">
+          <Link href="/" className="text-blue-600 hover:text-blue-800">
             ← Volver al inicio
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -283,14 +303,14 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   const agentConversations = conversations.filter(conv => conv.agent_id === agentId)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Header Sticky */}
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <a href="/" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+            <Link href="/" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
               ← Volver
-            </a>
+            </Link>
             <div className="w-px h-6 bg-gray-300"></div>
             <div className="flex items-center space-x-3">
               <span className="text-2xl">{agent.avatar}</span>
@@ -303,18 +323,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
           {/* Botones de acción */}
           <div className="flex items-center space-x-3">
-            {/* Botón nueva conversación */}
-            {messages.length > 0 && (
-              <button
-                onClick={startNewConversation}
-                className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Iniciar nueva conversación"
-              >
-                <span>✨</span>
-                <span>Nueva</span>
-              </button>
-            )}
-
             {/* Botón historial - CORREGIDO: Solo mostrar si hay conversaciones */}
             {agentConversations.length > 0 && (
               <button
@@ -334,13 +342,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
             <div className="relative">
               <AuthButton variant="chat" />
             </div>
-
-            {/* Indicador de guardado */}
-            {currentConversationId && (
-              <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                💾 Guardado
-              </div>
-            )}
           </div>
         </div>
       </header>
@@ -448,7 +449,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
               )}
             </div>
 
-            {/* Footer del modal */}
+            {/* Footer del modal con botón + */}
             <div className="border-t p-4 bg-gray-50 rounded-b-lg">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-gray-600">
@@ -459,9 +460,10 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
                     setShowHistory(false)
                     startNewConversation()
                   }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  ✨ Nueva conversación
+                  <span className="text-lg">+</span>
+                  <span>Nueva conversación</span>
                 </button>
               </div>
             </div>
@@ -470,77 +472,107 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
         document.body
       )}
 
-      {/* Chat Container */}
-      <div className="max-w-4xl mx-auto">
-        <div className="px-4 py-6 space-y-6 min-h-[calc(100vh-200px)]" key={messages.length}>
-          {messages.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">{agent.avatar}</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                ¡Hola! Soy {agent.name}
-              </h2>
-              <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-                {agent.description}
-              </p>
+      {/* Chat Container - Flexible */}
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto"
+      >
+        <div className="max-w-4xl mx-auto">
+          <div className="px-4 py-6 space-y-6 min-h-[calc(100vh-200px)]" key={messages.length}>
+            {messages.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">{agent.avatar}</div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                  ¡Hola! Soy {agent.name}
+                </h2>
+                <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
+                  {agent.description}
+                </p>
 
-              <div className="text-left max-w-2xl mx-auto">
-                <h3 className="font-semibold text-gray-900 mb-3">Preguntas de ejemplo:</h3>
-                <div className="space-y-2">
-                  {agent.exampleQuestions.map((question, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setInput(question)}
-                      className="block w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-800 text-sm border border-blue-200 transition-colors"
-                    >
-                      {question}
-                    </button>
-                  ))}
+                <div className="text-left max-w-2xl mx-auto">
+                  <h3 className="font-semibold text-gray-900 mb-3">Preguntas de ejemplo:</h3>
+                  <div className="space-y-2">
+                    {agent.exampleQuestions.map((question, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setInput(question)}
+                        className="block w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-800 text-sm border border-blue-200 transition-colors"
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {messages.map((message, index) => (
-            <div
-              key={`${message.timestamp}-${index}`}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+            {messages.map((message, index) => (
               <div
-                className={`max-w-3xl px-4 py-3 rounded-lg ${
-                  message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-200 text-gray-900'
-                }`}
+                key={`${message.timestamp}-${index}`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className="whitespace-pre-wrap">{message.content}</div>
-                <div className={`text-xs mt-2 ${
-                  message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
-                }`}>
-                  {new Date(message.timestamp).toLocaleTimeString()}
+                <div
+                  className={`max-w-3xl px-4 py-3 rounded-lg ${
+                    message.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white border border-gray-200 text-gray-900'
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap">{message.content}</div>
+                  <div className={`text-xs mt-2 ${
+                    message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                  <span className="text-gray-500 text-sm ml-2">{agent.name} está escribiendo...</span>
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <span className="text-gray-500 text-sm ml-2">{agent.name} está escribiendo...</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </div>
+      </div>
 
-        {/* Input Form */}
-        <div className="px-4 pb-6">
-          <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+      {/* Botón Scroll to Bottom - Flotante */}
+      {showScrollToBottom && (
+        <button
+          onClick={scrollToBottom}
+          className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-all duration-200 z-30"
+          title="Ir al final de la conversación"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 14l-7 7m0 0l-7-7m7 7V3"
+            />
+          </svg>
+        </button>
+      )}
+
+      {/* Input Form - Sticky */}
+      <div className="bg-white border-t sticky bottom-0 z-40">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <form onSubmit={handleSubmit}>
             <div className="flex space-x-3">
               <input
                 type="text"
