@@ -131,7 +131,7 @@ export default function AdminPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="admin123"
+              placeholder="Contraseña de administrador"
               style={{
                 padding: '10px',
                 fontSize: '16px',
@@ -139,6 +139,7 @@ export default function AdminPage() {
                 marginBottom: '20px',
                 width: '200px'
               }}
+              className="text-gray-900 placeholder:text-gray-600"
             />
             <br />
             <button
