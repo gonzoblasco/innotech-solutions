@@ -91,8 +91,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   useEffect(() => {
     const container = messagesContainerRef.current
     if (container) {
-      container.addEventListener('scroll', handleScroll)
-      return () => container.removeEventListener('scroll', handleScroll)
+      handleScroll()
     }
   }, [messages.length])
 
@@ -303,7 +302,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   const agentConversations = conversations.filter(conv => conv.agent_id === agentId)
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col">
       {/* Header Sticky */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -475,6 +474,7 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       {/* Chat Container - Flexible */}
       <div
         ref={messagesContainerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto"
       >
         <div className="max-w-4xl mx-auto">
