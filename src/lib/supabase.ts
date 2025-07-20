@@ -13,7 +13,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Función helper para crear clientes (exportada)
+// Función helper para crear clientes con configuración predeterminada
+export function createSupabaseClient() {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true
+    }
+  })
+}
+
+// Mantener compatibilidad con código existente
 export { createClient }
 
 // Types actualizados para incluir user_id

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase'
+import { createSupabaseClient } from '@/lib/supabase'
 
 // GET - Obtener conversaciones del usuario autenticado
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = createSupabaseClient()
 
     // Obtener usuario autenticado
     const authHeader = request.headers.get('authorization')
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 // POST - Crear nueva conversación para usuario autenticado
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = createSupabaseClient()
     const body = await request.json()
     const { agentId, title, messages } = body
 

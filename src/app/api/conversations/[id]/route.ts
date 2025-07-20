@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase'
+import { createSupabaseClient } from '@/lib/supabase'
 
 // GET - Obtener conversación específica (compatible con auth)
 export async function GET(
@@ -8,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params
-    const supabase = createClient()
+    const supabase = createSupabaseClient()
 
     // Intentar obtener usuario autenticado
     const authHeader = request.headers.get('authorization')
@@ -94,7 +94,7 @@ export async function PUT(
     const { id } = await context.params
     const body = await request.json()
     const { messages, title } = body
-    const supabase = createClient()
+    const supabase = createSupabaseClient()
 
     // Intentar obtener usuario autenticado
     const authHeader = request.headers.get('authorization')
@@ -187,7 +187,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params
-    const supabase = createClient()
+    const supabase = createSupabaseClient()
 
     // Intentar obtener usuario autenticado
     const authHeader = request.headers.get('authorization')
