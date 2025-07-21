@@ -7,9 +7,6 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const browserId = request.headers.get('x-browser-id')
 
-    console.log('🔍 Debug Auth Request:')
-    console.log('- Authorization header:', authHeader ? `Bearer ${authHeader.slice(7, 20)}...` : 'NONE')
-    console.log('- Browser ID header:', browserId)
 
     const result: any = {
       hasAuthHeader: !!authHeader,
@@ -29,7 +26,6 @@ export async function GET(request: NextRequest) {
           userId: user?.id
         }
 
-        console.log('🔍 Auth verification result:', result.authResult)
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         result.authResult = {
@@ -38,7 +34,6 @@ export async function GET(request: NextRequest) {
           userEmail: null,
           userId: null
         }
-        console.log('❌ Auth verification failed:', errorMessage)
       }
     }
 

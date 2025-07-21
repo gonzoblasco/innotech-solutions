@@ -7,7 +7,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { browser_id, user_id } = body
 
-    console.log('🔄 Starting migration for user:', user_id, 'browser:', browser_id)
 
     if (!browser_id || !user_id) {
       return NextResponse.json(
@@ -32,7 +31,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingUserConversations && existingUserConversations.length > 0) {
-      console.log('ℹ️ User already has conversations, skipping migration')
       return NextResponse.json({
         migrated: 0,
         message: 'Conversaciones ya fueron migradas previamente',
@@ -56,14 +54,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!browserConversations || browserConversations.length === 0) {
-      console.log('ℹ️ No browser conversations to migrate')
       return NextResponse.json({
         migrated: 0,
         message: 'No hay conversaciones del navegador para migrar'
       })
     }
 
-    console.log('📦 Found', browserConversations.length, 'conversations to migrate')
 
     // 3. Migrar conversaciones: actualizar user_id y mantener browser_id para referencia
     const { error: updateError } = await supabase
@@ -84,7 +80,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Successfully migrated', browserConversations.length, 'conversations')
 
     return NextResponse.json({
       migrated: browserConversations.length,

@@ -48,7 +48,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('👤 Loading conversations for user:', user.email)
 
     // Obtener conversaciones del usuario
     const { data: conversations, error } = await supabase
@@ -65,7 +64,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('📊 Loaded', conversations?.length || 0, 'user conversations')
 
     return NextResponse.json({
       conversations: conversations || [],
@@ -131,7 +129,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('📝 Creating conversation for user:', user.email, 'agent:', agentId)
 
     // Crear conversación para usuario autenticado
     const { data: conversation, error } = await supabase
@@ -154,7 +151,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Conversation created:', conversation.id)
 
     return NextResponse.json({
       conversation,

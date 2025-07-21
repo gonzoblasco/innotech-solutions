@@ -51,7 +51,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email)
 
       setSession(session)
       setUser(session?.user ?? null)
@@ -67,7 +66,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           })
 
           if (response.ok) {
-            console.log('Conversations migrated successfully')
           }
         } catch (error) {
           console.error('Migration failed:', error)
@@ -108,7 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Para desarrollo, auto-confirmar
       if (data.user && !data.user.email_confirmed_at) {
-        console.log('User registered, auto-signing in...')
         await login(email, password)
       }
     } catch (error: any) {

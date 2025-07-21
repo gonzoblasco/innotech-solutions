@@ -17,14 +17,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (!session) {
-      console.log('⚠️ No active session found')
       return NextResponse.json(
         { error: 'No active session' },
         { status: 401 }
       )
     }
 
-    console.log('🔑 Returning token for user:', session.user.email)
 
     return NextResponse.json({
       access_token: session.access_token,

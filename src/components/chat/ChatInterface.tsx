@@ -44,7 +44,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     }
 
     try {
-      console.log('🤖 Generando título inteligente para', messages.length, 'mensajes')
 
       const response = await fetch('/api/generate-title', {
         method: 'POST',
@@ -59,7 +58,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       const data = await response.json()
       const intelligentTitle = data.title || 'Nueva conversación'
 
-      console.log('🏷️ Título inteligente generado:', intelligentTitle)
       return intelligentTitle
 
     } catch (error) {
@@ -100,7 +98,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     setMessages([])
     setCurrentConversationId(null)
     setInput('')
-    console.log('🆕 Nueva conversación iniciada')
   }
 
   // Función para cargar conversación específica
@@ -108,7 +105,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
     setMessages(conversation.messages || [])
     setCurrentConversationId(conversation.id)
     setShowHistory(false)
-    console.log('📂 Conversación cargada:', conversation.title)
   }
 
   // Cargar última conversación del agente - CORREGIDO
@@ -122,7 +118,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       const lastConversation = agentConversations[0] // Ya vienen ordenadas por updated_at desc
 
       if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
-        console.log('🔄 Última conversación recuperada:', lastConversation.title, lastConversation.messages.length, 'mensajes')
         setMessages(lastConversation.messages)
         setCurrentConversationId(lastConversation.id)
         return true
@@ -136,14 +131,12 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   // Guardar conversación automáticamente con títulos inteligentes
   const saveConversation = async (newMessages: Message[]) => {
     try {
-      console.log('💾 saveConversation called with', newMessages.length, 'messages')
 
       if (!currentConversationId && newMessages.length > 0) {
         // Crear nueva conversación
         const firstUserMessage = newMessages.find(m => m.role === 'user')
         const initialTitle = firstUserMessage ? generateTitle(firstUserMessage.content) : 'Nueva conversación'
 
-        console.log('📝 Creando conversación con título inicial:', initialTitle)
 
         const conversation = await createConversation(agentId, initialTitle)
         setCurrentConversationId(conversation.id)
@@ -152,17 +145,14 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
         // Generar título inteligente si hay suficientes mensajes
         if (newMessages.length >= 3) {
-          console.log('🧠 Activando título inteligente con', newMessages.length, 'mensajes...')
           const intelligentTitle = await generateIntelligentTitle(newMessages)
           await updateConversation(conversation.id, newMessages, intelligentTitle)
-          console.log('🏷️ Título actualizado a:', intelligentTitle)
         }
 
         // Recargar conversaciones después de crear una nueva
         await loadConversations()
 
       } else if (currentConversationId) {
-        console.log('🔄 Actualizando conversación existente:', currentConversationId)
         await updateConversation(currentConversationId, newMessages)
 
         // Generar título inteligente si es una conversación que no lo tiene y ya tiene suficientes mensajes
@@ -172,10 +162,8 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
 
           // Si el título actual es igual al primer mensaje (título básico), generar inteligente
           if (currentConv && firstUserMessage && currentConv.title === generateTitle(firstUserMessage.content)) {
-            console.log('🧠 Generando título inteligente para conversación existente...')
             const intelligentTitle = await generateIntelligentTitle(newMessages)
             await updateConversation(currentConversationId, newMessages, intelligentTitle)
-            console.log('🏷️ Título inteligente aplicado a conversación existente:', intelligentTitle)
           }
         }
 
@@ -253,17 +241,14 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
   // EFECTO CORREGIDO - Cargar conversaciones al inicio
   useEffect(() => {
     const initializeChat = async () => {
-      console.log('🔄 Inicializando chat para agente:', agentId)
 
       // Cargar conversaciones primero
       await loadConversations()
 
       if (conversationId) {
         // Cargar conversación específica si viene en URL
-        console.log('📂 Cargando conversación específica:', conversationId)
       } else if (messages.length === 0) {
         // Intentar cargar última conversación del agente
-        console.log('🔍 Buscando última conversación del agente...')
         await loadLastConversationForAgent()
       }
     }
@@ -278,7 +263,6 @@ export default function ChatInterface({ agentId, conversationId }: ChatInterface
       const lastConversation = agentConversations[0]
 
       if (lastConversation && lastConversation.messages && lastConversation.messages.length > 0) {
-        console.log('🔄 Aplicando última conversación desde useEffect:', lastConversation.title)
         setMessages(lastConversation.messages)
         setCurrentConversationId(lastConversation.id)
       }

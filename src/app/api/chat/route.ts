@@ -13,12 +13,10 @@ export async function POST(request: NextRequest) {
     const validMessages = messages.filter((msg: any) => {
       const hasValidContent = msg.content && typeof msg.content === 'string' && msg.content.trim().length > 0
       if (!hasValidContent) {
-        console.log('🚫 Filtrando mensaje sin content:', JSON.stringify(msg, null, 2))
       }
       return hasValidContent
     })
 
-    console.log('📤 Mensajes enviados a OpenAI:', validMessages.length, 'de', messages.length)
 
     if (validMessages.length === 0) {
       return NextResponse.json(
@@ -47,7 +45,6 @@ export async function POST(request: NextRequest) {
       throw new Error('No se recibió respuesta del modelo')
     }
 
-    console.log('✅ Respuesta OpenAI recibida:', response.length, 'caracteres')
 
     return NextResponse.json({ response })
 

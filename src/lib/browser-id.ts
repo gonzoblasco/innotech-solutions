@@ -18,7 +18,6 @@ export function getBrowserId(): string {
   if (!browserId) {
     browserId = crypto.randomUUID()
     localStorage.setItem(BROWSER_ID_KEY, browserId)
-    console.log('🆔 Nuevo Browser ID generado:', browserId)
   }
 
   return browserId
@@ -28,7 +27,6 @@ export function getBrowserId(): string {
 export function regenerateBrowserId(): string {
   const newId = crypto.randomUUID()
   localStorage.setItem(BROWSER_ID_KEY, newId)
-  console.log('🔄 Browser ID regenerado:', newId)
   return newId
 }
 
@@ -40,5 +38,4 @@ export function hasBrowserId(): boolean {
 
 // Debug: Mostrar ID actual
 export function debugBrowserId(): void {
-  console.log('🔍 Browser ID actual:', getBrowserId())
 }

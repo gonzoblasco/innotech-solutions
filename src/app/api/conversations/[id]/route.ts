@@ -14,7 +14,6 @@ export async function GET(
     // 🔧 FIX: Usar cliente que respeta RLS
     const supabase = createRouteHandlerClient({ cookies })
 
-    console.log('🔍 Getting conversation:', id)
 
     // RLS se encarga del filtrado automático por user_id
     const { data: conversation, error } = await supabase
@@ -24,14 +23,12 @@ export async function GET(
       .single()
 
     if (error || !conversation) {
-      console.log('❌ Conversation not found or access denied:', error?.message)
       return NextResponse.json(
         { error: 'Conversation not found' },
         { status: 404 }
       )
     }
 
-    console.log('✅ Conversation found:', conversation.title)
     return NextResponse.json({ conversation })
 
   } catch (error: unknown) {
@@ -61,7 +58,6 @@ export async function PUT(
     if (messages) updateData.messages = messages
     if (title) updateData.title = title
 
-    console.log('🔄 Updating conversation:', id)
 
     // RLS se encarga de verificar que el usuario puede actualizar esta conversación
     const { data: conversation, error } = await supabase
@@ -72,14 +68,12 @@ export async function PUT(
       .single()
 
     if (error || !conversation) {
-      console.log('❌ Failed to update conversation:', error?.message)
       return NextResponse.json(
         { error: 'Failed to update conversation or access denied' },
         { status: 403 }
       )
     }
 
-    console.log('✅ Conversation updated:', id)
     return NextResponse.json({
       conversation,
       message: 'Conversation updated successfully'
@@ -106,7 +100,6 @@ export async function DELETE(
     // 🔧 FIX: Usar cliente que respeta RLS
     const supabase = createRouteHandlerClient({ cookies })
 
-    console.log('🗑️ Deleting conversation:', id)
 
     // RLS se encarga de verificar que el usuario puede eliminar esta conversación
     const { error } = await supabase
@@ -115,14 +108,12 @@ export async function DELETE(
       .eq('id', id)
 
     if (error) {
-      console.log('❌ Failed to delete conversation:', error.message)
       return NextResponse.json(
         { error: 'Failed to delete conversation or access denied' },
         { status: 403 }
       )
     }
 
-    console.log('✅ Conversation deleted:', id)
     return NextResponse.json({
       message: 'Conversation deleted successfully'
     })

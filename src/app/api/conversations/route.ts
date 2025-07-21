@@ -27,16 +27,13 @@ export async function GET(request: NextRequest) {
 
     if (session?.user) {
       // Usuario autenticado: RLS filtra automáticamente por user_id
-      console.log('👤 API: Loading conversations for user:', session.user.email)
       // NO necesitamos filtro manual porque RLS se encarga
     } else {
       // Usuario anónimo: filtrar por browser_id
       const browserId = request.headers.get('x-browser-id')
       if (!browserId) {
-        console.log('⚠️ No browser ID for anonymous user')
         return Response.json({ conversations: [] })
       }
-      console.log('🌐 API: Loading conversations for browser:', browserId)
       query = query.eq('browser_id', browserId).is('user_id', null)
     }
 
@@ -51,7 +48,6 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: error.message }, { status: 500 })
     }
 
-    console.log(`📊 API: Returning ${data?.length || 0} conversations`)
     return Response.json({ conversations: data || [] })
 
   } catch (error) {
@@ -83,7 +79,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (session?.user) {
-      console.log('👤 API: Creating conversation for user:', session.user.email)
       conversationData.user_id = session.user.id
       // browser_id queda null
     } else {
@@ -91,7 +86,6 @@ export async function POST(request: NextRequest) {
       if (!browserId) {
         return Response.json({ error: 'Browser ID required for anonymous users' }, { status: 400 })
       }
-      console.log('🌐 API: Creating conversation for browser:', browserId)
       conversationData.browser_id = browserId
       // user_id queda null
     }
@@ -107,7 +101,6 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: error.message }, { status: 500 })
     }
 
-    console.log('✅ API: Conversation created:', data.id)
     return Response.json(data)
 
   } catch (error) {

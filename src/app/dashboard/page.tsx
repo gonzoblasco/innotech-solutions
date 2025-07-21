@@ -47,7 +47,6 @@ export default function Dashboard() {
 
       // TEMPORAL: Usar browser ID hasta que arreglemos JWT
       const browserId = getBrowserId()
-      console.log('📡 Loading dashboard conversations with browser ID:', browserId)
 
       const response = await fetch(`/api/conversations`, {
         headers: {
@@ -62,7 +61,6 @@ export default function Dashboard() {
         // Asegurar que es un array
         const validConversations = Array.isArray(conversationsList) ? conversationsList : []
         setConversations(validConversations)
-        console.log(`📊 Loaded ${validConversations.length} dashboard conversations`)
       } else {
         console.error('Failed to load dashboard conversations:', response.status)
         setConversations([]) // Fallback a array vacío
@@ -82,10 +80,8 @@ export default function Dashboard() {
     migrationRef.current = true
 
     try {
-      console.log('🔄 Starting automatic migration...')
 
       const browserId = getBrowserId()
-      console.log('🆔 Browser ID for migration:', browserId)
 
       // TEMPORAL: Usar el endpoint que funciona
       const response = await fetch('/api/user/migrate', {
@@ -102,7 +98,6 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Migration result:', data)
 
         setMigrationStatus({
           completed: true,
@@ -112,7 +107,6 @@ export default function Dashboard() {
 
         // Solo recargar si se migraron conversaciones
         if (data.migrated > 0) {
-          console.log('🔄 Reloading conversations after migration...')
           await loadUserConversations()
         }
       } else {
@@ -140,7 +134,6 @@ export default function Dashboard() {
     if (user && !initializationRef.current) {
       initializationRef.current = true
 
-      console.log('👤 User logged in, initializing dashboard...')
 
       // Ejecutar en secuencia para evitar conflictos
       const initializeDashboard = async () => {

@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
     // Tomar los primeros 4-6 mensajes para contexto
     const contextMessages = messages.slice(0, 6)
 
-    console.log('🏷️ Generando título para', contextMessages.length, 'mensajes')
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -51,7 +50,6 @@ Ejemplos buenos: "Estrategia de pricing para PyME", "Optimización de flujo de c
 
     const title = completion.choices[0]?.message?.content?.trim() || 'Nueva conversación'
 
-    console.log('✅ Título generado:', title)
 
     return NextResponse.json({ title })
 

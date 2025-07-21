@@ -18,7 +18,6 @@ export async function middleware(req: NextRequest) {
 
       // Si hay error de token o no hay sesión, redirect a login
       if (error || !session) {
-        console.log('Middleware auth error:', error?.message || 'No session')
 
         const redirectUrl = new URL('/login', req.url)
         redirectUrl.searchParams.set('returnTo', req.nextUrl.pathname + req.nextUrl.search)

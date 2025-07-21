@@ -4,8 +4,6 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
 
-    console.log('🔍 JWT Debug:')
-    console.log('- Raw auth header:', authHeader)
 
     const result: any = {
       hasAuthHeader: !!authHeader,
@@ -27,7 +25,6 @@ export async function GET(request: NextRequest) {
         isValidJWTStructure: segments.length === 3
       }
 
-      console.log('🔍 Token analysis:', result.tokenAnalysis)
 
       // Si tiene 3 segmentos, intentar decodificar header
       if (segments.length === 3) {
